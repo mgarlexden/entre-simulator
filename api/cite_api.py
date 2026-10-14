@@ -145,7 +145,7 @@ def _fact_score(tokens: list[str], fact: dict) -> float:
 
 
 @app.get("/ask")
-def ask(q: str = Query(..., min_length=1, max_length=300), k: int = Query(1, ge=1, le=6)):
+def ask(q: str = Query(..., min_length=1, max_length=300), k: int = Query(3, ge=1, le=6)):
     data = _facts()
     tokens = _query_tokens(q)
     scored = [(_fact_score(tokens, f), f) for f in data["facts"]]

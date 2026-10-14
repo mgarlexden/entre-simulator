@@ -50,6 +50,14 @@ SOURCES = {
         "publisher": "국가데이터처 가축동향조사 (KAPE 통계DB)", "title": "돼지 시도 월령별·사육규모별 농장수 및 마리수",
         "api": "KAPE 통계DB 화면 조회", "url": "", "period": "2026년 1~2분기",
     },
+    "kape_pork": {
+        "publisher": "축산물품질평가원·축산유통정보 (KAPE 통계DB)", "title": "돼지고기 유통비용률, 부위별 소비자가격, 수입 소비자가격, 재고, 도매 식육포장가격",
+        "api": "KAPE 통계DB 화면 조회", "url": "", "period": "2021~2026년 (자료별 기간 상이)",
+    },
+    "kape_auction": {
+        "publisher": "축산물품질평가원 (KAPE 통계DB)", "title": "돼지 등급별 경락가격 (돈피·성별·등급)",
+        "api": "KAPE 통계DB 화면 조회", "url": "", "period": "2026년 7~9월",
+    },
     "kasi": {
         "publisher": "한국천문연구원", "title": "특일 정보 (공휴일)", "api": "data.go.kr 15012690",
         "url": "https://www.data.go.kr/data/15012690/openapi.do", "period": "2026~2027년",
@@ -190,6 +198,16 @@ def build() -> list[dict]:
     if pig_path.exists():
         for item in json.loads(pig_path.read_text(encoding="utf-8"))["facts"]:
             facts.append({"id": item["id"], "tags": item["tags"], "text": item["text"], "sources": ["kape_pig"]})
+    # 11) 돼지고기 유통·소비자가격·재고·도매 (KAPE 통계DB)
+    pk_path = MOCK / "pork_kape_2026.json"
+    if pk_path.exists():
+        for item in json.loads(pk_path.read_text(encoding="utf-8"))["facts"]:
+            facts.append({"id": item["id"], "tags": item["tags"], "text": item["text"], "sources": ["kape_pork"]})
+    # 12) 돼지 등급별 경락가격 (축산물품질평가원, 2026년 7~9월, 전국 기준)
+    au_path = MOCK / "pig_auction_2026.json"
+    if au_path.exists():
+        for item in json.loads(au_path.read_text(encoding="utf-8"))["facts"]:
+            facts.append({"id": item["id"], "tags": item["tags"], "text": item["text"], "sources": ["kape_auction"]})
     return facts
 
 
