@@ -46,6 +46,10 @@ SOURCES = {
         "title": "소 가축시장 산지가격, 축종별 시도별 농장수 및 마리수",
         "api": "KAPE 통계DB 화면 조회", "url": "", "period": "가격 2026년 7~9월, 농장 2026년 2분기",
     },
+    "kape_pig": {
+        "publisher": "국가데이터처 가축동향조사 (KAPE 통계DB)", "title": "돼지 시도 월령별·사육규모별 농장수 및 마리수",
+        "api": "KAPE 통계DB 화면 조회", "url": "", "period": "2026년 1~2분기",
+    },
     "kasi": {
         "publisher": "한국천문연구원", "title": "특일 정보 (공휴일)", "api": "data.go.kr 15012690",
         "url": "https://www.data.go.kr/data/15012690/openapi.do", "period": "2026~2027년",
@@ -181,6 +185,11 @@ def build() -> list[dict]:
     if kape_path.exists():
         for item in json.loads(kape_path.read_text(encoding="utf-8"))["facts"]:
             facts.append({"id": item["id"], "tags": item["tags"], "text": item["text"], "sources": ["kape"]})
+    # 10) 돼지 사육 두수 (KAPE 통계DB, 국가데이터처 가축동향조사)
+    pig_path = MOCK / "pig_2026.json"
+    if pig_path.exists():
+        for item in json.loads(pig_path.read_text(encoding="utf-8"))["facts"]:
+            facts.append({"id": item["id"], "tags": item["tags"], "text": item["text"], "sources": ["kape_pig"]})
     return facts
 
 
