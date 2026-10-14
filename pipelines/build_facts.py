@@ -37,6 +37,15 @@ SOURCES = {
         "api": "data.go.kr 시간자료 (AsosHourlyInfoService)", "url": "https://www.data.go.kr",
         "period": "2016~2025년",
     },
+    "kmta_2026_10": {
+        "publisher": "한국육류유통수출협회", "title": "월간 육류유통 2026년 10월호 (Vol.135)",
+        "api": "잡지 본문 (협회 자체 조사 + 정부 통계 인용)", "url": "", "period": "2026년 8~9월 자료, 10월 전망",
+    },
+    "kape": {
+        "publisher": "축산물품질평가원·축산유통정보 (KAPE 통계DB) / 국가데이터처 가축동향조사",
+        "title": "소 가축시장 산지가격, 축종별 시도별 농장수 및 마리수",
+        "api": "KAPE 통계DB 화면 조회", "url": "", "period": "가격 2026년 7~9월, 농장 2026년 2분기",
+    },
     "kasi": {
         "publisher": "한국천문연구원", "title": "특일 정보 (공휴일)", "api": "data.go.kr 15012690",
         "url": "https://www.data.go.kr/data/15012690/openapi.do", "period": "2026~2027년",
@@ -158,6 +167,20 @@ def build() -> list[dict]:
                          f"하루 전체로는 {pct(m['all_hour_rain_share'])}예요(2016~2025년 평균)."),
                 "sources": ["kma_asos_hourly"],
             })
+    # 8) 월간 육류유통 2026년 10월호 (가격·전망 표, 쪽 번호 포함)
+    kmta_path = MOCK / "kmta_2026_10.json"
+    if kmta_path.exists():
+        for item in json.loads(kmta_path.read_text(encoding="utf-8"))["facts"]:
+            facts.append({
+                "id": item["id"], "tags": item["tags"],
+                "text": f"{item['text']} (월간 육류유통 2026년 10월호 {item['page']}쪽)",
+                "sources": ["kmta_2026_10"],
+            })
+    # 9) KAPE 통계DB 화면 (소 가축시장 산지가격, 시도별 농장수·마리수)
+    kape_path = MOCK / "kape_2026.json"
+    if kape_path.exists():
+        for item in json.loads(kape_path.read_text(encoding="utf-8"))["facts"]:
+            facts.append({"id": item["id"], "tags": item["tags"], "text": item["text"], "sources": ["kape"]})
     return facts
 
 

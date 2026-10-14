@@ -113,36 +113,59 @@ def _facts() -> dict:
     return json.loads(FACTS_PATH.read_text(encoding="utf-8"))
 
 
-def _tag_in(tag: str, q_raw: str) -> bool:
-    # "1월"이 "11월" 안에 들어가 잘못 맞지 않도록, 숫자로 시작하는 태그는 앞에 숫자가 없어야 한다.
-    if tag[:1].isdigit():
-        return re.search(r"(?<![0-9])" + re.escape(tag), q_raw) is not None
-    return tag in q_raw
+STOP = {"알려줘", "알려", "얼마", "얼마나", "몇", "어떻게", "있어요", "인가요", "예요", "이에요", "해줘", "좀", "그리고", "은", "는", "이", "가", "을", "를", "의", "에", "도", "요"}
 
 
-def _fact_score(q: set[str], q_raw: str, fact: dict) -> tuple[int, float]:
-    tags = fact.get("tags", [])
-    tag_hits = sum(1 for t in tags if t and _tag_in(t, q_raw))
-    doc = _grams(fact["text"] + " " + " ".join(tags))
-    overlap = len(q & doc)
-    return tag_hits, overlap / max(1, len(q))
+def _query_tokens(q: str) -> list[str]:
+    """질문을 낱말로 나누고 조사(가·는·을 등)를 떼어 낸다. 예: '돼지고기 소매가' -> ['돼지고기', '소매']."""
+    out = []
+    for t in re.findall(r"[0-9A-Za-z가-힣]+", q):
+        if t in STOP or len(t) < 2:
+            continue
+        if len(t) > 2 and t[-1] in "가이은는을를의에도요":
+            t = t[:-1]
+        if len(t) >= 2 and t not in STOP:
+            out.append(t)
+    return out
+
+
+def _fact_score(tokens: list[str], fact: dict) -> float:
+    """낱말마다 점수: 태그와 같으면 3점, 태그에 들어 있으면 2점, 문장에 있으면 1점."""
+    tags = [t for t in fact.get("tags", []) if t]
+    text = fact["text"]
+    score = 0.0
+    for t in tokens:
+        if t in tags:
+            score += 3
+        elif any(t in tag or tag in t for tag in tags):
+            score += 2
+        elif t in text:
+            score += 1
+    return score
 
 
 @app.get("/ask")
-def ask(q: str = Query(..., min_length=1, max_length=300), k: int = Query(4, ge=1, le=6)):
+def ask(q: str = Query(..., min_length=1, max_length=300), k: int = Query(2, ge=1, le=6)):
     data = _facts()
-    qg = _grams(q)
-    scored = [(_fact_score(qg, q, f), f) for f in data["facts"]]
-    scored = [(s, f) for s, f in scored if s[0] > 0 or s[1] >= 0.5]
-    if scored:
-        top_tag = max(s[0] for s, _ in scored)
-        # 태그가 가장 많이 맞은 항목끼리만 답한다 (예: "강남 카페"면 강남구 카페 항목만)
-        scored = [(s, f) for s, f in scored if s[0] == top_tag] if top_tag > 0 else scored
-    scored.sort(key=lambda x: (-x[0][0], -x[0][1]))
-    hits = [f for _, f in scored][:k]
-    if not hits:
+    tokens = _query_tokens(q)
+    scored = [(_fact_score(tokens, f), f) for f in data["facts"]]
+    scored = [(sc, f) for sc, f in scored if sc >= 2]
+    if not scored:
         return {"answer": None, "facts": [], "citations": [],
-                "message": "등록된 근거 자료에 없는 질문이에요. 화면의 숫자에 대한 질문이나 상권·상가·날씨·공휴일에 대한 질문을 해 주세요."}
+                "message": "등록된 근거 자료에 없는 질문이에요. 화면의 숫자에 대한 질문이나 상권·상가·날씨·공휴일·축산물 가격에 대한 질문을 해 주세요."}
+    # 가장 높은 점수의 60% 이상인 항목만 남기고, 점수 순으로 k개까지 보여 준다.
+    top = max(sc for sc, _ in scored)
+    scored = [(sc, f) for sc, f in scored if sc >= 0.75 * top]
+    scored.sort(key=lambda x: -x[0])
+    hits = []
+    seen_text = set()
+    for _, f in scored:
+        if f["text"] in seen_text:
+            continue
+        seen_text.add(f["text"])
+        hits.append(f)
+        if len(hits) == k:
+            break
     used_ids: list[str] = []
     facts_out = []
     for f in hits:
