@@ -4,6 +4,7 @@
 .m-cites a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .m-cite-meta { opacity: 0.75; }
 .m-cite-note { display: block; opacity: 0.75; margin-top: 4px; }
+.m-chatlog p { white-space: pre-line; margin: 0 0 8px; }
 .m-cite-box { margin: 4px 0 12px; font-size: 13px; }
 .m-cite-box > summary { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 .m-cite-box .m-cites { margin-top: 8px; }

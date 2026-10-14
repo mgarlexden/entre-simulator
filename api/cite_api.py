@@ -8,7 +8,9 @@ ontology/sources.csv 에서 공신력 있는 출처만 골라 질문과 가장 �
 from __future__ import annotations
 
 import csv
+import math
 import re
+from collections import Counter
 from pathlib import Path
 
 from fastapi import FastAPI, Query
@@ -129,56 +131,89 @@ def _query_tokens(q: str) -> list[str]:
     return out
 
 
-def _fact_score(tokens: list[str], fact: dict) -> float:
-    """낱말마다 점수: 태그와 같으면 3점, 태그에 들어 있으면 2점, 문장에 있으면 1점."""
-    tags = [t for t in fact.get("tags", []) if t]
-    text = fact["text"]
-    score = 0.0
-    for t in tokens:
-        if t in tags:
-            score += 3
-        elif any(t in tag or tag in t for tag in tags):
-            score += 2
-        elif t in text:
-            score += 1
-    return score
+def _vec(text: str) -> Counter:
+    return Counter(_grams(text))
+
+
+# 질문에 자주 쓰는 말을 근거 문장에 실제로 쓰이는 말로 넓힌다. 예: "동향"을 물으면 "추이", "올랐"이 있는 문장을 찾는다.
+SYNONYMS = {
+    "동향": ["추이", "추세", "올랐", "내렸", "변화"],
+    "추세": ["추이", "동향", "변화"],
+    "가격": ["원/kg", "원/100g", "경락가격", "도매가", "소비자가격"],
+    "최근": ["9월", "8월", "2026"],
+    "어때": ["추이", "올랐", "내렸"],
+}
+
+
+def _rank_facts(q: str, facts: list[dict]) -> list[tuple[float, dict]]:
+    """질문과 근거 항목의 문자 2-gram TF-IDF 코사인 유사도(0~1). 태그는 두 번 넣어 가중치를 준다."""
+    docs = [_vec(" ".join(f.get("tags", [])) * 1 + " " + " ".join(f.get("tags", [])) + " " + f["text"]) for f in facts]
+    df: Counter = Counter()
+    for d in docs:
+        df.update(d.keys())
+    n = len(docs)
+    idf = {g: math.log((n + 1) / (c + 1)) + 1 for g, c in df.items()}
+
+    def weigh(v: Counter) -> dict[str, float]:
+        w = {g: c * idf.get(g, math.log(n + 1) + 1) for g, c in v.items()}
+        norm = math.sqrt(sum(x * x for x in w.values())) or 1.0
+        return {g: x / norm for g, x in w.items()}
+
+    # 자료 어디에도 없는 2-gram(예: '원가', '구입')은 질문 벡터에서 뺀다. 남겨 두면 유사도가 떨어진다.
+    toks = _query_tokens(q)
+    expanded = toks + [w for t in toks for w in SYNONYMS.get(t, [])]
+    qgrams = Counter({g: c for g, c in _vec(" ".join(expanded) or q).items() if g in df})
+    qv = weigh(qgrams)
+    out = []
+    for f, d in zip(facts, docs):
+        dv = weigh(d)
+        sim = sum(x * dv.get(g, 0.0) for g, x in qv.items())
+        out.append((sim, f))
+    out.sort(key=lambda x: -x[0])
+    return out
+
+
+# 근거만으로는 답을 정할 수 없는 질문은 항목을 붙이지 않고, 필요한 정보를 되물어 본다.
+# (키워드, 되물을 문장). 질문에 숫자가 이미 있으면 되묻지 않는다.
+CLARIFY = [
+    (re.compile(r"구입 ?비용|원가|예산|재료비|고기 ?값.*(잡|계획)"),
+     "돼지고기 구입 비용은 한 달에 쓰는 양을 알아야 계산할 수 있어요. 한 달에 돼지고기를 몇 kg 정도 쓰시나요? 메뉴(삼겹살·목살 등)를 같이 알려 주시면 더 정확하게 계산해 드릴게요."),
+]
 
 
 @app.get("/ask")
 def ask(q: str = Query(..., min_length=1, max_length=300), k: int = Query(3, ge=1, le=6)):
     data = _facts()
-    tokens = _query_tokens(q)
-    scored = [(_fact_score(tokens, f), f) for f in data["facts"]]
-    scored = [(sc, f) for sc, f in scored if sc >= 2]
-    if not scored:
+    if not re.search(r"\d", q):
+        for pat, ask_back in CLARIFY:
+            if pat.search(q):
+                return {"answer": None, "facts": [], "citations": [], "message": ask_back}
+    ranked = _rank_facts(q, data["facts"])
+    # 유사도 0.15 미만은 무관한 것으로 보고 버린다. 최고 유사도의 70% 아래도 뺀다.
+    top = ranked[0][0] if ranked else 0.0
+    if top < 0.15:
         return {"answer": None, "facts": [], "citations": [],
                 "message": "등록된 근거 자료에 없는 질문이에요. 화면의 숫자에 대한 질문이나 상권·상가·날씨·공휴일·축산물 가격에 대한 질문을 해 주세요."}
-    # 가장 높은 점수의 60% 이상인 항목만 남기고, 점수 순으로 k개까지 보여 준다.
-    top = max(sc for sc, _ in scored)
-    scored = [(sc, f) for sc, f in scored if sc >= 0.75 * top]
-    scored.sort(key=lambda x: -x[0])
-    hits = []
-    seen_text = set()
-    for _, f in scored:
-        if f["text"] in seen_text:
+    hits, seen_text = [], set()
+    for sim, f in ranked:
+        if sim < max(0.15, 0.7 * top) or f["text"] in seen_text:
             continue
         seen_text.add(f["text"])
-        hits.append(f)
+        hits.append((sim, f))
         if len(hits) == k:
             break
     used_ids: list[str] = []
     facts_out = []
-    for f in hits:
-        cites = []
+    for sim, f in hits:
         for sid in f["sources"]:
             if sid not in used_ids:
                 used_ids.append(sid)
-            cites.append(sid)
-        facts_out.append({"text": f["text"], "source_ids": cites})
+        facts_out.append({"text": f["text"], "source_ids": f["sources"], "similarity": round(sim, 3)})
     citations = []
     for sid in used_ids:
-        s = data["sources"][sid]
-        citations.append({"id": sid, "title": s["title"], "publisher": s["publisher"], "year": s["period"],
-                          "type": "공공 API", "url": s["url"], "note": f"호출 식별자: {s['api']}"})
-    answer = " ".join(f["text"] for f in facts_out)
+        src = data["sources"][sid]
+        citations.append({"id": sid, "title": src["title"], "publisher": src["publisher"], "year": src["period"],
+                          "type": "공공 API", "url": src["url"], "note": f"호출 식별자: {src['api']}"})
+    # 항목이 둘 이상이면 불릿으로 나눠 보여 준다.
+    answer = facts_out[0]["text"] if len(facts_out) == 1 else "\n".join(f"• {f['text']}" for f in facts_out)
     return {"answer": answer, "facts": facts_out, "citations": citations}

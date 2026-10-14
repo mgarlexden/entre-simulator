@@ -185,7 +185,7 @@ def build() -> list[dict]:
         for item in json.loads(kmta_path.read_text(encoding="utf-8"))["facts"]:
             facts.append({
                 "id": item["id"], "tags": item["tags"],
-                "text": f"{item['text']} (월간 육류유통 2026년 10월호 {item['page']}쪽)",
+                "text": item["text"],
                 "sources": ["kmta_2026_10"],
             })
     # 9) KAPE 통계DB 화면 (소 가축시장 산지가격, 시도별 농장수·마리수)

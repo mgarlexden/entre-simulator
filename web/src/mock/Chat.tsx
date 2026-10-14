@@ -29,7 +29,7 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
         : `6개월 안에는 사장님 생활비까지 벌지 못해요. 6개월째 영업이익이 ${man(run.rows[5].op)}이에요.`;
       return { text, cq: "외식 폐업 생존 영업기간" };
     }
-    if (/많이 드는|비용|돈이/.test(q)) {
+    if (/많이 드는|여는 데|오픈 비용|창업 비용|개업 비용/.test(q)) {
       const top = [...openingCost(store, profile.gu).lines].sort((a, b) => b.amount - a.amount);
       return { text: `여는 데 드는 ${man(run.opening)} 가운데 ${iga(top[0].label)} ${man(top[0].amount)}으로 가장 커요. 그다음이 ${top[1].label} ${man(top[1].amount)}이에요.`, cq: "외식업 경영 비용 임차 인건비 식재료" };
     }
