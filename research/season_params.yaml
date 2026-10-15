@@ -11,6 +11,11 @@ start:
   regular_share: {value: 0.25, tag: 가정}
   fatigue: {value: 30, tag: 가정, note: "0-100, 기준 계획에서의 균형값"}
 
+start_new:   # 신규 오픈 점포의 시작 상태 (new_season(opening=True)). start.* 는 수요 배율의 기준이라 그대로 둔다.
+  review_count: {value: 0, tag: 가정, note: "문을 연 날은 리뷰가 없다. 첫 리뷰가 평점을 정한다"}
+  awareness: {value: 0.6, tag: 가정, note: "인지도 0.6 = 기준 가게의 약 60% (손님 약 -14%). 매달 기준 쪽으로 15% 되돌아가고 리뷰와 마케팅이 올린다. 민감도 변수 (0.5~0.8)"}
+  regular_share: {value: 0.05, tag: 가정, note: "단골 비율 5% (엔진 하한). 단골 -20%p = 손님 -20%. 민감도 변수 (0.05~0.15)"}
+
 base_plan:   # the hero store as it is today (hero_base.yaml); 평소 = this plan, October, starting state
   meat_price: 19000
   soju_price: 5000
@@ -144,7 +149,8 @@ regulars:
   deadband: {value: 0.01, tag: 가정, note: "평소와 만족 차이가 이보다 작으면 단골 변화 없음 (달마다 생기는 우연한 차이)"}
   change_penalty: {value: 0.02, tag: 가정, note: "가격이나 원육을 바꾼 달은 단골이 조금 빠진다"}
   min: 0.05
-  max: 0.35
+  max: 0.35   # KOSIS 한식산업실태조사 2025 고객 재방문율 34.75%와 일치
+  opening_accrual: {value: 0.03, tag: 가정, note: "신규 점포는 단골이 매달 최대 3%p씩 쌓인다 (기준 가게 수준 25%까지). 만족이 평소보다 낮으면 절반. 민감도 변수 (0.01~0.05)"}
 
 awareness:
   decay: {value: 0.85, tag: 가정, note: "매달 기준 1.0 쪽으로 15% 되돌아간다"}

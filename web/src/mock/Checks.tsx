@@ -1,7 +1,7 @@
 // 열기 전 점검, shown under the builder: five questions an owner asks, each answered with a number, what to do about
 // it, and how it was worked out. Status is always a mark plus a word, never colour alone.
 import { useMemo } from "react";
-import { STATUS_LABEL, checks, man, settledNet, simulate, storeStats, sunkCost, type Levers, type Profile, type Status, type Store } from "./model";
+import { FOOD_SHARE, STATUS_LABEL, checks, man, settledNet, simulate, storeStats, sunkCost, type Levers, type Profile, type Status, type Store } from "./model";
 
 function Mark({ s }: { s: Status }) {
   return (
@@ -49,7 +49,11 @@ export default function Checks({ profile, store, levers }: { profile: Profile; s
           </li>
         ))}
       </ul>
-      <p className="m-src">손님 수는 {profile.gu} 한식음식점 평균 매출에서 어림한 값이에요. 고깃집만의 매출 자료는 공개된 것이 없어요. 월세는 아직 예시값이라 결과가 크게 달라질 수 있어요.</p>
+      <p className="m-aside">
+        식재료비는 매출의 약 {Math.round(FOOD_SHARE * (19000 / levers.price) * 100)}%로 잡았어요. 서울권 음식점 평균은 39.3%예요
+        (한국농촌경제연구원 2025년 조사. 술과 음료가 들어 있고 고깃집만의 값은 아니에요). 고기 값은 한 인분 원가에서 따로 계산해서, 고깃값이 오르면 그만큼 올라가요.
+      </p>
+      <p className="m-src">손님 수는 {profile.gu} 한식음식점 평균 매출에서 어림한 값이에요. 고깃집만의 매출 자료는 공개된 것이 없어요. 월세는 한국부동산원 상권 값을 구로 묶은 근사라 매물마다 달라질 수 있어요. 아는 매물이 있으면 동네 분석에서 직접 넣을 수 있어요.</p>
     </section>
   );
 }

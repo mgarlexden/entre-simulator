@@ -12,6 +12,7 @@ const GameV2 = lazy(() => import("./v2/GameV2"));
 const ReportPrint = lazy(() => import("./v2/ReportPrint"));
 const Mock = lazy(() => import("./mock/Mock"));
 const Sources = lazy(() => import("./mock/Sources"));
+const Engine = lazy(() => import("./mock/Engine"));
 
 function useHash() {
   const [hash, setHash] = useState(location.hash || "#/");
@@ -72,6 +73,7 @@ function App() {
   if (raw === "/report-print") return <Suspense fallback={null}><ReportPrint /></Suspense>;
   if (raw === "/v1") return <Suspense fallback={<p className="g-loading">게임 데이터를 불러오는 중입니다</p>}><Game query={query} /></Suspense>;
   if (raw === "/sources") return <Suspense fallback={null}><Sources /></Suspense>;
+  if (raw === "/engine") return <Suspense fallback={null}><Engine /></Suspense>;
   if (raw === "/v2") return <Suspense fallback={null}><GameV2 query={query} /></Suspense>;
   return <Suspense fallback={null}><Mock /></Suspense>; // #/: the pre-founder flow (mock); the old game is #/v2
 }

@@ -46,13 +46,107 @@ def v(path: str):
     return node["value"] if isinstance(node, dict) and "value" in node else node
 
 
-@functools.lru_cache(maxsize=1)
+# --- store context -----------------------------------------------------------------------------------------
+# 엔진의 기준 점포는 혜화동 25평 한 곳이다 (research/hero_base.yaml). set_store()로 점포 입력(평수, 테이블, 월세,
+# 수요 규모)을 덮어쓰면 기준 점포가 그 점포로 바뀐다. 평소(baseline) 같은 캐시는 점포마다 따로 만든다.
+# 덮어쓴 점포의 평소는 반복 횟수를 줄여(기본 150회) 몇십 초 안에 만들고 디스크에 저장한다.
+_STORE_KEY = ""
+_STORE_CACHED = ("_neutral_sat", "_baseline_cached", "_load_full", "_elasticity_samples", "_calibration", "_month_means")
+
+
+def set_store(store: dict | None) -> None:
+    """store = {"params": {criterion_id: value}, "arrival_scale": float, "baseline_runs": int} 또는 None(기준 점포)."""
+    import json as _json
+    global _STORE_KEY
+    key = _json.dumps(store, sort_keys=True, ensure_ascii=False) if store else ""
+    if key == _STORE_KEY:
+        return
+    _STORE_KEY = key
+    for name in _STORE_CACHED:
+        globals()[name].cache_clear()
+
+
+def _store() -> dict:
+    import json as _json
+    return _json.loads(_STORE_KEY) if _STORE_KEY else {}
+
+
+def _runs(path: str) -> int:
+    """평소와 월별 평균에 쓰는 반복 횟수. 기준 점포는 yaml 값, 덮어쓴 점포는 store.baseline_runs."""
+    if _STORE_KEY:
+        return int(_store().get("baseline_runs", 150))
+    return int(v(path))
+
+
+@functools.lru_cache(maxsize=16)
+def _base_for(key: str) -> tuple[dict, dict]:
+    import json as _json
+    base, prof = load_params(), load_profile()
+    if key:
+        st = _json.loads(key)
+        for k, val in (st.get("params") or {}).items():
+            base[k] = val
+            base["_ref"][k] = val
+        if "arrival_scale" in st:
+            base["drv_arrival_rate"] = base["drv_arrival_rate"] * float(st["arrival_scale"])
+            base["_ref"]["drv_arrival_rate"] = base["drv_arrival_rate"]
+    return base, prof
+
+
 def _base() -> tuple[dict, dict]:
-    return load_params(), load_profile()
+    return _base_for(_STORE_KEY)
+
+
+# 엔진 달력(calendar.yaml)은 10~3월뿐이다. 다른 달을 시작 달로 고르면 아래 값으로 채운다 (전부 가정).
+#   수요 지수: 동네 분기 지수 (store.calendar.demand_index). 손님 구성: 중립, 대학가는 7~8월만 방학(1월 값).
+_ALL_MONTHS = list(range(1, 13))
+_VACATION = {"twenties": 0.7, "office": 1.0, "family": 1.05}
+_EXT_NOTE = {4: "봄, 중간고사 철", 5: "야외 활동이 늘고 대학 축제가 있는 달", 6: "초여름, 기말고사 철", 7: "여름방학과 장마",
+             8: "여름방학, 무더위", 9: "개강 시즌, 선선해지는 달"}
+# 사건 확률 (4~9월 가정). 달마다 다른 사건만 따로 두고, 나머지는 가까운 달의 값을 쓴다.
+_EXT_PROB = {
+    "festival_week": {4: 0.20, 5: 0.45, 6: 0.10, 7: 0.0, 8: 0.0, 9: 0.40},
+    "exam_week": {4: 0.30, 5: 0.0, 6: 0.40, 7: 0.0, 8: 0.0, 9: 0.0},
+    "rain_week": {4: 0.10, 5: 0.15, 6: 0.30, 7: 0.45, 8: 0.40, 9: 0.25},
+    "cold_wave": {4: 0.0, 5: 0.0, 6: 0.0, 7: 0.0, 8: 0.0, 9: 0.0},
+}
+_PROXY = {4: 3, 5: 10, 6: 11, 7: 11, 8: 11, 9: 10}   # 그 밖의 사건: 가까운 계절의 달 값
+
+
+def _event_prob(eid: str, e: dict, m: int) -> float:
+    pr = e.get("prob") or {}
+    if m in pr:
+        return float(pr[m])
+    if eid in _EXT_PROB:
+        return _EXT_PROB[eid].get(m, 0.0)
+    return float(pr.get(_PROXY.get(m), 0.0))
+
+
+def _calendar(m: int) -> dict:
+    """달력 한 달. 점포 덮어쓰기에 calendar가 있으면 수요 지수를 그 동네의 분기 지수로 바꾼다.
+    대학가가 아닌 동네는 방학·시험으로 20대 비중이 달라지는 효과(segment_mult)도 중립으로 둔다.
+    calendar.yaml에 없는 달(4~9월)은 분기 지수와 중립 구성으로 만든다."""
+    c = _store().get("calendar")
+    base = data()["CAL"].get(m)
+    if base is not None:
+        cal = dict(base)
+    else:
+        cal = {"label": f"{m}월", "note": _EXT_NOTE.get(m, ""), "demand_index": 1.0,
+               "segment_mult": dict(_VACATION) if m in (7, 8) else {"twenties": 1.0, "office": 1.0, "family": 1.0},
+               "terrace_availability": 0.0, "rain_nights_share": 0.0, "group_bookings": 4,
+               "tags": {"demand_index": "동네 분기 지수 (월 분할 없음)", "weather": "가정"}}
+    if c and str(m) in c["demand_index"]:
+        cal["demand_index"] = float(c["demand_index"][str(m)])
+        if c.get("neutral_segments"):
+            cal["segment_mult"] = {k: 1.0 for k in cal["segment_mult"]}
+        cal["label"] = f"{m}월"
+        cal["note"] = c.get("note", "") if base is not None else _EXT_NOTE.get(m, c.get("note", ""))
+    return cal
 
 
 def months() -> list[int]:
-    return data()["CAL"]["_meta"]["months"]
+    ms = _store().get("months")
+    return [int(x) for x in ms] if ms else data()["CAL"]["_meta"]["months"]
 
 
 def base_plan() -> dict:
@@ -60,10 +154,17 @@ def base_plan() -> dict:
 
 
 # --- state -----------------------------------------------------------------------------------------------
-def new_season(seed: int = 42, mode: str = "free") -> dict:
+def new_season(seed: int = 42, mode: str = "free", *, opening: bool = False, cash: float | None = None) -> dict:
+    """opening=True starts a store that has just opened (no reviews, low 인지도, few 단골) instead of the established
+    hero store. start.* stays the reference the demand multipliers are measured against; start_new.* is only the
+    starting state. cash overrides the 운영자금 (what is left after the opening costs)."""
     st = {k: v(f"start.{k}") for k in ("cash", "rating", "review_count", "awareness", "regular_share", "fatigue")}
+    if opening:
+        st.update({k: v(f"start_new.{k}") for k in ("review_count", "awareness", "regular_share")})
+    if cash is not None:
+        st["cash"] = float(cash)
     st["rating_recent"] = st["rating_all"] = st["rating"]   # rating (= rating_recent) drives demand
-    return {"engine": "sim.season v2", "mode": mode, "seed": int(seed), "month_index": 0, **st,
+    return {"engine": "sim.season v2", "mode": mode, "seed": int(seed), "month_index": 0, "opening": bool(opening), **st,
             "negative_months": 0, "low_revenue_months": 0, "closed": False, "closed_reason": None,
             "plan": base_plan(),
             "flags": {"competitor": False, "rent_mult": 1.0, "wage_mult": 1.0}, "history": []}
@@ -82,10 +183,11 @@ def draw_events(state: dict) -> list[str]:
     fatigue-driven staff quit. Seeded by (seed, month); at most _meta.max_per_month random events."""
     ev, m, rng = data()["EV"], current_month(state), _rng(state, 1)
     out = []
+    excluded = set(_store().get("excluded_events") or [])   # 동네 유형에 맞지 않는 사건 (예: 대학가 행사)
     for eid, e in ev.items():
-        if eid.startswith("_"):
+        if eid.startswith("_") or eid in excluded:
             continue
-        p = (e.get("prob") or {}).get(m, 0.0)
+        p = _event_prob(eid, e, m)
         if any(state["plan"].get(k) != want for k, want in (e.get("requires") or {}).items()):
             continue   # e.g. 숙성육 편차 only when last month's stock was aged
         if eid == "owner_sick":
@@ -131,10 +233,10 @@ def _validate(plan: dict) -> dict:
 
 def _setup(state: dict, plan: dict, events: list[str], *, closure_days: int = 0, quit_now: bool = False) -> dict:
     """Engine params + assumptions + profile for this month, plus the off-DES pieces (lunch, groups, marketing)."""
-    P, CAL, EV = data()["P"], data()["CAL"], data()["EV"]
+    P, EV = data()["P"], data()["EV"]
     base, profile = _base()
     m = current_month(state)
-    cal = CAL[m]
+    cal = _calendar(m)
     plan = _validate(plan)
     p = clone(base)
     a = dict(SIM_ASSUMPTIONS)
@@ -484,6 +586,16 @@ def _regular_delta(ds: float) -> float:
     return max(-cap, min(cap, d))
 
 
+def _opening_accrual(state: dict, loyal_diff: float) -> float:
+    """A new store has no 단골. They build up with repeat visits (KOSIS 한식 재방문율 34.75% caps the share), more
+    slowly when guests are less satisfied than usual. Only while the share is below the established level."""
+    if not state.get("opening"):
+        return 0.0
+    gap = max(0.0, v("start.regular_share") - state["regular_share"])
+    rate = v("regulars.opening_accrual") * (1.0 if loyal_diff >= -v("regulars.deadband") else 0.5)
+    return min(gap, rate)
+
+
 def _baseline() -> dict:
     """평소: base plan, October, starting state, no events. The mean of every P&L line over many DES runs (the
     preview is a mean, so its anchor must be one too). Cached on disk by a hash of every input it depends on."""
@@ -497,7 +609,7 @@ _BASELINE_INPUTS = ("research/season_params.yaml", "research/calendar.yaml", "re
 @functools.lru_cache(maxsize=1)
 def _baseline_cached() -> dict:
     import json
-    n = int(v("band.baseline_runs"))
+    n = _runs("band.baseline_runs")
     path = _cache_path("season_baseline", n)
     if path.exists():
         return json.loads(path.read_text())
@@ -1180,7 +1292,9 @@ def play_month(state: dict, plan: dict, events: list[str] | None = None, *, band
     s2["awareness"] = float(max(0.5, aw))
     prev = state["plan"]
     changes = int(prev.get("meat_price") != plan["meat_price"]) + int(prev.get("meat_grade") != plan["meat_grade"])
-    reg = state["regular_share"] + _regular_delta(su["_mean_loyal"] - _neutral_sat()["loyal"]) - v("regulars.change_penalty") * changes
+    loyal_diff = su["_mean_loyal"] - _neutral_sat()["loyal"]
+    reg = (state["regular_share"] + _regular_delta(loyal_diff) + _opening_accrual(state, loyal_diff)
+           - v("regulars.change_penalty") * changes)
     s2["regular_share"] = float(min(v("regulars.max"), max(v("regulars.min"), reg)))
     target = _fatigue_target(month["staff_load"], plan, events)
     s2["fatigue"] = float(min(100.0, max(0.0, v("fatigue.carry") * state["fatigue"] + (1 - v("fatigue.carry")) * target
@@ -1231,6 +1345,7 @@ def play_month(state: dict, plan: dict, events: list[str] | None = None, *, band
         "reviews": (night_reviews + reviews)[: int(v("reviews.max_listed"))],
         "decision_reviews": len(night_reviews),
         "reviews_total": n_rev,
+        "nights": month["nights"],
         "owner_line": _owner_line(draw["op"], shadow["op"], s2["cash"], events, s2["fatigue"], waterfall),
         "night_events": _night_render(su, dn["night"], seed_draw, dn["pick"]) if dn else [],
         "labels": _labels(su, events),
@@ -1379,7 +1494,7 @@ def _calibration(month: int = 10) -> dict:
 def _month_means() -> dict:
     """DES means of the base plan in every other season month (start state, no events); cached like 평소."""
     import json
-    n = int(v("band.month_runs"))
+    n = _runs("band.month_runs")
     path = _cache_path("season_months", n)
     if path.exists():
         return json.loads(path.read_text())
@@ -1400,6 +1515,7 @@ def _month_means() -> dict:
 def _cache_path(name: str, n: int) -> Path:
     import hashlib
     h = hashlib.sha1(str(n).encode())
+    h.update(_STORE_KEY.encode("utf-8"))
     for f in _BASELINE_INPUTS:
         h.update((ROOT / f).read_bytes())
     return ROOT / "data" / "cache" / f"{name}_{h.hexdigest()[:16]}.json"
@@ -1592,8 +1708,9 @@ def step_estimate(state: dict, plan: dict, events: list[str] | None = None) -> t
                           + v("awareness.reviews_per_100") * n_rev / 100 + ev_state.get("awareness", 0))
     prev = state["plan"]
     changes = int(prev.get("meat_price") != plan["meat_price"]) + int(prev.get("meat_grade") != plan["meat_grade"])
+    ld = e["satisfaction_loyal"] - _neutral_sat(analytic=True)["loyal"]
     s2["regular_share"] = min(v("regulars.max"), max(v("regulars.min"), state["regular_share"]
-                              + _regular_delta(e["satisfaction_loyal"] - _neutral_sat(analytic=True)["loyal"])
+                              + _regular_delta(ld) + _opening_accrual(state, ld)
                               - v("regulars.change_penalty") * changes))
     s2["fatigue"] = pv["state_next"]["fatigue"]
     s2["plan"] = plan

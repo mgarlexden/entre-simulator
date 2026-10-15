@@ -4,12 +4,30 @@
 // shock sizes from research/shocks.yaml. Every input and its standing is listed on the #/sources page (sources.ts).
 
 export type Industry = "bbq" | "cafe";
-export type Profile = { industry: Industry; gu: string; reasons: string[]; capital: number; age: string }; // capital in 만원
+// rent: 사용자가 직접 넣은 현금 월세(만원/평·월, 보증금 제외). 넣은 구에서만 쓴다. 선택 사항.
+// dong: 고른 동네(행정동). 그 구에서만 쓴다. 없으면 구 전체 평균.
+export type Profile = { industry: Industry; gu: string; reasons: string[]; capital: number; age: string; rent?: { gu: string; v: number }; dong?: { gu: string; name: string } }; // capital in 만원
 export type Gu = { code: string; name: string; rings: [number, number][][]; c: [number, number]; r: number }; // c: label point, r: room around it
 // demand: 점포당 월매출 ÷ 서울 평균. stores: 상권 안 한식음식점 수. closure: 1년 폐업률(%). sales: 점포당 월매출(만원).
-// tx: 점포당 하루 결제 건수. ticket: 결제 1건 금액(원). rent: 만원/평·월, 예시값. pork: 구 전체의 돼지고기 구이 가게 수.
+// tx: 점포당 하루 결제 건수. ticket: 결제 1건 금액(원). rent: 현금 월세 만원/평·월 (rentSrc가 값의 출처). pork: 구 전체의 돼지고기 구이 가게 수.
 // dow: 요일별 매출 비중 (월..일). qidx: 분기별 매출 지수 (1~4분기, 연평균 1).
-export type GuStat = { demand: number; stores: number; closure: number; sales: number; tx: number; ticket: number; rent: number; pork: number; opening: number; dow: number[]; qidx: number[] };
+export type RentSrc = "입력" | "R-ONE 동네" | "R-ONE 근사" | "R-ONE 채움" | "예시값";
+// area*: 동네를 골랐을 때만 채워진다 (pipelines/build_dong_stats.py). 동네를 안 골랐으면 null.
+export type GuStat = {
+  demand: number; stores: number; closure: number; sales: number; tx: number; ticket: number; rent: number; rentLow: number; rentHigh: number;
+  rentAll: number | null; rentAreas: number; rentArea: string | null; rentSrc: RentSrc; pork: number; opening: number; dow: number[]; qidx: number[];
+  area: string | null; areaType: string | null; areaPork: number | null; areaStores: number | null;
+};
+export type Dong = {
+  code: string; name: string; stores: number; pork: number; sales_month: number; raw_per_store: number | null; rel: number | null;
+  dow: number[]; qidx: number[]; shares: { weekend: number; lunch: number; evening: number; age20: number; age30: number }; type: string;
+};
+export type DongData = { _meta: { generated: string; year: number; caveats: string[] }; gu: Record<string, Dong[]> };
+let DONGS: DongData | null = null;
+export const setDongData = (d: DongData | null) => { DONGS = d; };
+export const dongsOf = (gu: string): Dong[] => DONGS?.gu[gu] ?? [];
+let AREA_IN: { gu: string; name: string } | null = null;
+export const setAreaInput = (a: { gu: string; name: string } | null) => { AREA_IN = a; };
 type Row = Record<string, number> & { dow_share: number[]; quarter_index: number[] };
 type Block = { service_name: string; seoul: Row; gu: Record<string, Row> };
 export type GuData = {
@@ -21,6 +39,24 @@ let DATA: GuData | null = null;
 export const setGuData = (d: GuData) => { DATA = d; };
 export const guData = () => DATA;
 
+// 월세. pipelines/fetch_rone.py가 만든 rent_gu.json: 한국부동산원 소규모 상가 1층 임대료(보증금 환산 포함)를 상권별로 받아 구에 배정한 근사.
+// 현금 월세 = 환산 포함 값 ÷ (1 + 보증금 개월 수 × 전환율 ÷ 12). 보증금 개월 수는 서울시 상가임대차 실태조사의 11~15개월 안에서 12로 둠.
+export const DEPOSIT_MONTHS = 12;
+export type RentData = {
+  _meta: { quarter: string; generated: string };
+  seoul_avg: number | null; conv_seoul_pct: number | null;
+  gu: Record<string, { rent_man_per_pyeong: number; n_areas: number; areas: string[]; imputed: boolean }>;
+  area: Record<string, number>;
+  dong?: Record<string, { rent_man_per_pyeong: number; areas: string[] }>; // "구|동 이름"
+};
+let RENT: RentData | null = null;
+export const setRentData = (d: RentData | null) => { RENT = d; };
+export const rentData = () => RENT;
+let RENT_IN: { gu: string; v: number } | null = null;
+export const setRentInput = (r: { gu: string; v: number } | null) => { RENT_IN = r; };
+const cashRent = (all: number) => all / (1 + (DEPOSIT_MONTHS * ((RENT?.conv_seoul_pct ?? 7) / 100)) / 12);
+const round1 = (x: number) => Math.round(x * 10) / 10;
+
 export const DEFAULT_PROFILE: Profile = { industry: "bbq", gu: "마포구", reasons: [], capital: 12000, age: "30대" };
 
 function hash(s: string): number {
@@ -31,11 +67,40 @@ function hash(s: string): number {
 
 export function guStat(name: string): GuStat {
   const g = DATA?.bbq.gu[name];
-  const rent = Math.round(9 + hash(name + "r") * 20); // placeholder: no rent data is connected
-  if (!g) return { demand: 1, stores: 0, closure: 0, sales: 0, tx: 0, ticket: 0, rent, pork: 0, opening: 0, dow: Array(7).fill(1 / 7), qidx: [1, 1, 1, 1] };
+  let rent = Math.round(9 + hash(name + "r") * 20); // 월세 자료가 없을 때만 쓰는 예시값
+  let rentLow = rent * 0.75, rentHigh = rent * 1.25, rentAll: number | null = null, rentAreas = 0;
+  let rentSrc: RentSrc = "예시값";
+  const rr = RENT?.gu[name];
+  if (rr) {
+    rentAll = rr.rent_man_per_pyeong;
+    rent = round1(cashRent(rentAll));
+    const vals = rr.areas.map((a) => RENT?.area[a]).filter((v): v is number => v != null).map(cashRent);
+    rentLow = vals.length >= 2 ? Math.min(...vals) : rent * 0.75; // 상권이 한 곳이면 ±25% (가정)
+    rentHigh = vals.length >= 2 ? Math.max(...vals) : rent * 1.25;
+    rentAreas = rr.imputed ? 0 : rr.n_areas;
+    rentSrc = rr.imputed ? "R-ONE 채움" : "R-ONE 근사";
+  }
+  if (RENT_IN && RENT_IN.gu === name && RENT_IN.v > 0) { rent = RENT_IN.v; rentLow = rentHigh = rent; rentSrc = "입력"; }
+  // 동네를 골랐으면 그 동네 값으로 바꾼다. 점포당 매출은 구 값에 구 안의 상대 위치(rel)를 곱하고, 월세는 이름이 맞는 R-ONE 상권 값을 쓴다.
+  const dg = AREA_IN && AREA_IN.gu === name ? DONGS?.gu[name]?.find((d) => d.name === AREA_IN!.name) : undefined;
+  let rentArea: string | null = null;
+  if (dg && rentSrc !== "입력") {
+    const dr = RENT?.dong?.[`${name}|${dg.name}`];
+    if (dr) {
+      rent = round1(cashRent(dr.rent_man_per_pyeong));
+      rentAll = dr.rent_man_per_pyeong; rentLow = rent * 0.75; rentHigh = rent * 1.25; // 상권 하나라 ±25% (가정)
+      rentAreas = 1; rentArea = dr.areas.join(", "); rentSrc = "R-ONE 동네";
+    }
+  }
+  const rentPart = { rent, rentLow: round1(rentLow), rentHigh: round1(rentHigh), rentAll, rentAreas, rentArea, rentSrc };
+  const area = { area: dg?.name ?? null, areaType: dg?.type ?? null, areaPork: dg?.pork ?? null, areaStores: dg?.stores ?? null };
+  if (!g) return { demand: 1, stores: 0, closure: 0, sales: 0, tx: 0, ticket: 0, ...rentPart, ...area, pork: 0, opening: 0, dow: Array(7).fill(1 / 7), qidx: [1, 1, 1, 1] };
+  const sales = dg?.rel ? Math.round(g.sales_per_store_month * Math.min(2, Math.max(0.4, dg.rel))) : g.sales_per_store_month;
   return {
-    demand: g.demand_index, stores: g.stores, closure: +(g.closure_rate * 100).toFixed(1), sales: g.sales_per_store_month, tx: g.tx_per_store_day,
-    ticket: g.ticket, rent, pork: DATA?.pork?.gu[name]?.pork ?? 0, opening: g.opening_rate, dow: g.dow_share, qidx: g.quarter_index,
+    demand: +(g.demand_index * (sales / g.sales_per_store_month)).toFixed(2), stores: g.stores, closure: +(g.closure_rate * 100).toFixed(1),
+    sales, tx: g.tx_per_store_day,
+    ticket: g.ticket, ...rentPart, ...area, pork: DATA?.pork?.gu[name]?.pork ?? 0, opening: g.opening_rate,
+    dow: dg?.dow ?? g.dow_share, qidx: dg?.qidx ?? g.quarter_index,
   };
 }
 
@@ -181,7 +246,7 @@ export function storeStats(store: Store) {
 }
 
 // ---- opening cost -------------------------------------------------------------------------------------
-export const SIGN = 250, FIRST_STOCK = 300, DEPOSIT_MONTHS = 10; // 가정
+export const SIGN = 250, FIRST_STOCK = 300; // 가정
 export const LOAN_RATE = 0.06; // 연 이자율, 가정. 이자만 매달 냄
 export const cashLeft = (profile: Profile, store: Store) => profile.capital + store.loan - openingCost(store, profile.gu).total;
 export type CostLine = { key: string; label: string; amount: number; basis: string };
@@ -191,7 +256,7 @@ export function openingCost(store: Store, gu: string): { lines: CostLine[]; tota
   const seatCost = store.items.filter((i) => ITEM[i.id].cat === "seat").reduce((n, i) => n + ITEM[i.id].price, 0);
   const equip = store.items.filter((i) => ITEM[i.id].cat === "equip").reduce((n, i) => n + ITEM[i.id].price, 0);
   const lines: CostLine[] = [
-    { key: "deposit", label: "보증금", amount: st.rent * store.pyeong * DEPOSIT_MONTHS, basis: `월세 ${DEPOSIT_MONTHS}개월분으로 가정` },
+    { key: "deposit", label: "보증금", amount: st.rent * store.pyeong * DEPOSIT_MONTHS, basis: `월세 ${DEPOSIT_MONTHS}개월분 (서울시 실태조사: 보증금은 월세의 11~15개월)` },
     { key: "interior", label: "인테리어 공사", amount: GRADES[store.grade].perPyeong * store.pyeong, basis: `${store.pyeong}평, 평당 ${GRADES[store.grade].perPyeong}만원 (${GRADES[store.grade].label})` },
     { key: "equip", label: "주방과 설비", amount: equip, basis: "주방, 냉장고, 계산대 등" },
     { key: "seat", label: "테이블과 의자", amount: seatCost, basis: `테이블 ${s.tables}개, ${s.seats}석` },

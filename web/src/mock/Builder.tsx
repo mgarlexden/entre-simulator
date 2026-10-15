@@ -259,7 +259,10 @@ export default function Builder({ profile, store, setStore, levers, setLevers, o
             );
           })}
         </ul>
-        <button type="button" className="m-btn m-tray-next" disabled={left < 0 || stats.seats === 0} onClick={onNext}>시뮬레이션 하러 가기</button>
+        <div className="m-tray-go">
+          <button type="button" className="m-btn m-btn-outline" onClick={() => document.querySelector(".m-checks")?.scrollIntoView({ behavior: "smooth", block: "start" })}>오픈 전 점검 보러가기</button>
+          <button type="button" className="m-btn" disabled={left < 0 || stats.seats === 0} onClick={onNext}>시뮬레이션 하러 가기</button>
+        </div>
       </div>
 
       <Checks profile={profile} store={store} levers={levers} />

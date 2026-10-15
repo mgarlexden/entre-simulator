@@ -1,13 +1,13 @@
 // The pre-founder flow (mock): 내 조건 → 동네 분석 → 가게 꾸미기 (위험 신호 점검 포함) → 시뮬레이션. See DESIGN.md.
 import { Suspense, lazy, useEffect, useState } from "react";
-import { DEFAULT_LEVERS, DEFAULT_PROFILE, recommend, setGuData, starterStore, type Gu, type Levers, type Profile, type Store } from "./model";
+import { DEFAULT_LEVERS, DEFAULT_PROFILE, recommend, setAreaInput, setDongData, setGuData, setRentData, setRentInput, starterStore, type Gu, type Levers, type Profile, type Store } from "./model";
 import ProfileStep from "./Profile";
 import Analysis from "./Analysis";
 import Chat from "./Chat";
 import "./mock.css";
 
 const Builder = lazy(() => import("./Builder"));
-const Simulate = lazy(() => import("./Simulate"));
+const Simulate = lazy(() => import("./SimulateEngine"));
 
 export type Step = "profile" | "area" | "build" | "sim";
 const STEPS: { key: Step; label: string }[] = [
@@ -31,7 +31,9 @@ export default function Mock() {
 
   useEffect(() => {
     const get = (f: string) => fetch(`${import.meta.env.BASE_URL}mock/${f}`).then((r) => r.json());
-    Promise.all([get("seoul_gu.json"), get("gu_stats.json")]).then(([g, d]) => { setGuData(d); setGus(g); setReady(true); }).catch(() => setReady(true));
+    const rent = get("rent_gu.json").catch(() => null); // 없으면 월세는 예시값으로 돌아간다
+    const dong = get("dong_stats.json").catch(() => null); // 없으면 동네 고르기를 숨긴다
+    Promise.all([get("seoul_gu.json"), get("gu_stats.json"), rent, dong]).then(([g, d, r, dn]) => { setGuData(d); setRentData(r); setDongData(dn); setGus(g); setReady(true); }).catch(() => setReady(true));
   }, []);
 
   useEffect(() => {
@@ -47,6 +49,8 @@ export default function Mock() {
     scrollTo({ top: 0 });
   };
   const idx = STEPS.findIndex((s) => s.key === step);
+  setRentInput(profile.rent && profile.rent.gu === profile.gu ? profile.rent : null); // 하위 화면이 읽기 전에 맞춰 둔다
+  setAreaInput(profile.dong && profile.dong.gu === profile.gu ? profile.dong : null);
 
   return (
     <div className={`m-app m-step-${step}`}>
@@ -69,7 +73,7 @@ export default function Mock() {
           </button>
         )}
       </header>
-      <p className="m-mocknote">목업 화면입니다. 지역 매출과 점포 수는 서울시 공개 자료, 날씨는 기상청 공개 자료, 비용과 월세는 가정이에요. <a href="#/sources">출처 보기</a></p>
+      <p className="m-mocknote">목업 화면입니다. 지역 매출과 점포 수는 서울시 공개 자료, 날씨는 기상청 공개 자료, 월세는 한국부동산원 상권 값을 구로 묶은 근사, 나머지 비용은 가정이에요. <a href="#/sources">출처 보기</a></p>
 
       {!ready && <p className="m-loading">자료를 불러오는 중이에요</p>}
       {ready && step === "profile" && <ProfileStep profile={profile} setProfile={setProfile} gus={gus} onDone={() => go("area")} />}

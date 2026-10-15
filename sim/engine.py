@@ -384,6 +384,7 @@ def simulate_month(params: dict, profile: dict, seed: int, *, a: dict = SIM_ASSU
     waits, dwells, parties = [], [], []
     staff_work = staff_avail = 0.0
     rainy = 0
+    per_night = []   # 밤별 합계: 화면의 일별 흐름에 쓴다
     for night_i, dow in enumerate(nights):
         rain = bool(rng.random() < params["wx_rain_nights_share"])
         terrace = bool(rng.random() < params["sto_terrace_availability"]) and not rain
@@ -392,6 +393,11 @@ def simulate_month(params: dict, profile: dict, seed: int, *, a: dict = SIM_ASSU
                            rain=rain, record=record)
         staff_work += r["staff_work_min"]
         staff_avail += r["servers"] * r["open_min"]
+        n_rev = r["rev_meat"] + r["rev_alc"] + r["rev_side"]
+        n_food = (r["portions"] * params["cst_meat_cost_per_portion"] + r["bottles"] * params["cst_alcohol_cost_per_bottle"]
+                  + r["meals"] * a["meal_price"] * params["cst_side_cost_ratio"] + r["covers"] * params["cst_banchan_cost_per_cover"])
+        per_night.append({"dow": dow, "rain": rain, "revenue": n_rev, "covers": r["covers"], "walkaways": r["walkaways"],
+                          "cogs": n_food, "fees": n_rev * params["cst_card_share"] * params["cst_card_fee_rate"]})
         if record:
             parties += [{**pt, "night": night_i, "dow": dow, "rain": rain} for pt in r["parties"]]
         for k in keys:
@@ -408,7 +414,7 @@ def simulate_month(params: dict, profile: dict, seed: int, *, a: dict = SIM_ASSU
             # driver-tree values (sim-measured, for the UI tree)
             "covers_day": tot["covers"] / n, "arrivals_day": tot["arrivals"] / n,
             "balk_rate": tot["walkaway_persons"] / tot["arrived_persons"] if tot["arrived_persons"] else 0.0,
-            "dwell_avg_min": float(np.mean(dwells)) if dwells else 0.0,
+            "dwell_avg_min": float(np.mean(dwells)) if dwells else 0.0, "nights": per_night,
             "seats_eff": tot["seat_hours_available"] / (params["drv_open_hours"] * n),
             "staff_load": staff_work / staff_avail if staff_avail else 0.0, "rainy_nights": rainy,
             **({"parties": parties} if record else {})}

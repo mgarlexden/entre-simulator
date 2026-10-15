@@ -1,7 +1,7 @@
 // Step 2. The flat map stays on the left; the right column shows one finding at a time: 동네 → 예산 → 자금.
 import { useState } from "react";
 import SeoulMap from "./SeoulMap";
-import { METRICS, RAMP, guStat, man, openingCost, rankOf, type Gu, type Metric, type Profile, type Store } from "./model";
+import { DEPOSIT_MONTHS, METRICS, RAMP, dongsOf, guStat, man, openingCost, rankOf, rentData, type Gu, type Metric, type Profile, type Store } from "./model";
 
 type Tab = "place" | "budget" | "fund";
 const TABS: { key: Tab; label: string }[] = [{ key: "place", label: "동네" }, { key: "budget", label: "드는 돈" }, { key: "fund", label: "모자란 돈" }];
@@ -32,6 +32,14 @@ export default function Analysis({ profile, setProfile, gus, store, onNext }: {
   const demandRank = rankOf(profile.gu, "demand", names);
   const rentRank = names.filter((n) => guStat(n).rent > st.rent).length + 1;
   const m = span(metric);
+  const q = rentData()?._meta.quarter;
+  const qLabel = q ? `${q.slice(0, 4)}년 ${Number(q.slice(4))}분기` : "";
+  const dongs = dongsOf(profile.gu);
+  const rentNote = st.rentSrc === "입력" ? "직접 넣은 값이에요."
+    : st.rentSrc === "R-ONE 동네" ? `한국부동산원 ${qLabel} 소규모 상가 1층 임대료 중 이 동네가 속한 상권(${st.rentArea})의 값에서 보증금 환산분(${DEPOSIT_MONTHS}개월)을 뺀 현금 월세예요.`
+    : st.rentSrc === "R-ONE 근사" ? `한국부동산원 ${qLabel} 소규모 상가 1층 임대료를 이 구의 상권 ${st.rentAreas}곳으로 평균내고, 보증금 환산분(${DEPOSIT_MONTHS}개월)을 뺀 현금 월세예요. 괄호는 상권별 범위예요.`
+    : st.rentSrc === "R-ONE 채움" ? "이 구에는 조사 상권이 없어 다른 구 상권의 중앙값으로 채웠어요. 참고만 하세요."
+    : "예시값이에요. 월세 자료를 불러오지 못했어요.";
 
   return (
     <main className="m-area">
@@ -42,7 +50,7 @@ export default function Analysis({ profile, setProfile, gus, store, onNext }: {
           ))}
         </div>
         {gus.length > 0
-          ? <SeoulMap gus={gus} metric={metric} selected={profile.gu} onSelect={(gu) => setProfile({ ...profile, gu })} />
+          ? <SeoulMap gus={gus} metric={metric} selected={profile.gu} onSelect={(gu) => setProfile({ ...profile, gu, rent: undefined, dong: undefined })} />
           : <p className="m-loading">지도를 그리는 중이에요</p>}
         <div className="m-legend">
           <span>{METRICS[metric].fmt(m.lo)}</span>
@@ -59,20 +67,54 @@ export default function Analysis({ profile, setProfile, gus, store, onNext }: {
 
         {tab === "place" && (
           <div className="m-finding" key="place">
-            <h1>{profile.gu} 한식음식점은 한 곳당 한 달에 <mark>{man(st.sales)}</mark>을 팔아요. 25개 구 중 {demandRank}번째예요.</h1>
+            <h1>{profile.gu}{st.area ? ` ${st.area}` : ""} 한식음식점은 한 곳당 한 달에 <mark>{man(st.sales)}</mark>을 팔아요.{st.area ? "" : ` 25개 구 중 ${demandRank}번째예요.`}</h1>
+            {dongs.length > 0 && (
+              <div className="m-dong">
+                <label htmlFor="dong-in">동네 고르기 <small>(선택, 안 고르면 {profile.gu} 전체 평균)</small></label>
+                <select id="dong-in" value={profile.dong && profile.dong.gu === profile.gu ? profile.dong.name : ""}
+                  onChange={(e) => setProfile({ ...profile, dong: e.target.value ? { gu: profile.gu, name: e.target.value } : undefined })}>
+                  <option value="">{profile.gu} 전체 (구 평균)</option>
+                  {dongs.map((d) => (
+                    <option key={d.code} value={d.name}>{d.name} · {d.type} · 고깃집 {d.pork}곳{d.rel ? ` · 매출 구 평균의 ${Math.round(d.rel * 100)}%` : ""}</option>
+                  ))}
+                </select>
+                <small>고깃집(돼지고기 구이)이 많은 동 순서예요. 동네를 고르면 아래 숫자와 시뮬레이션이 그 동네 기준으로 바뀌어요. 동네 유형은 매출의 연령·시간대 비중으로 나눈 규칙 분류이고, 한식음식점 전체 기준이에요. 점포 수가 20곳보다 적은 동은 매출 비교를 하지 않아요.</small>
+              </div>
+            )}
             <dl className="m-rows">
               <div><dt>매출 지수<small>한식음식점 한 곳의 월매출, 서울 평균이 1</small></dt><dd>{st.demand.toFixed(2)}</dd></div>
               <div><dt>고깃집 수<small>돼지고기 구이 가게, 구 전체. 25개 구 중 {porkRank}번째로 많아요</small></dt><dd>{st.pork.toLocaleString("ko-KR")}곳</dd></div>
               <div><dt>한식음식점 수<small>상권 안의 가게</small></dt><dd>{st.stores.toLocaleString("ko-KR")}곳</dd></div>
               <div><dt>하루 결제 건수<small>한식음식점 한 곳당, 결제 1건은 보통 한 팀</small></dt><dd>{st.tx}건</dd></div>
               <div><dt>1년 폐업률<small>2025년에 문 닫은 한식음식점 비율</small></dt><dd>{st.closure}%</dd></div>
-              <div><dt>평당 월세<small>예시값이에요. 아직 실제 자료가 없어요.</small></dt><dd className="is-fake">{st.rent}만원</dd></div>
+              <div>
+                <dt>평당 월세<small>{rentNote}</small></dt>
+                <dd className={st.rentSrc === "예시값" ? "is-fake" : undefined}>{st.rent}만원{st.rentLow !== st.rentHigh && <small className="m-range"> ({st.rentLow}~{st.rentHigh})</small>}</dd>
+              </div>
             </dl>
+            <div className="m-rentin">
+              <label htmlFor="rent-in">찾아 둔 매물이 있다면 평당 월세를 넣어 보세요 <small>(선택)</small></label>
+              <div>
+                <input id="rent-in" type="number" inputMode="decimal" min={0} step={0.5} placeholder={String(st.rent)}
+                  value={profile.rent && profile.rent.gu === profile.gu ? profile.rent.v : ""}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value);
+                    setProfile({ ...profile, rent: v > 0 ? { gu: profile.gu, v } : undefined });
+                  }} />
+                <span>만원/평·월</span>
+                {profile.rent && <button type="button" className="m-link" onClick={() => setProfile({ ...profile, rent: undefined })}>지우기</button>}
+              </div>
+              <small>보증금을 뺀, 매달 내는 현금 월세예요. 넣으면 보증금과 월 고정비가 이 값으로 다시 계산돼요.</small>
+            </div>
             {profile.reasons.includes("월세가 쌀 것 같아서") && (
-              <p className="m-aside">월세가 쌀 것 같다고 하셨는데, 월세는 아직 실제 자료가 없어 확인해 드릴 수 없어요. 지금 값은 예시값이에요 ({rentRank}번째).</p>
+              <p className="m-aside">
+                {st.rentSrc === "예시값"
+                  ? <><b>월세가 쌀 것 같다고 하셨는데,</b> 월세 자료를 불러오지 못해 확인해 드릴 수 없어요 (예시값 {rentRank}번째).</>
+                  : <><b>월세가 쌀 것 같다고 하셨죠.</b> 이 구의 평당 월세는 25개 구 중 비싼 순으로 {rentRank}번째예요. 상권 값을 구로 묶은 근사라, 같은 구 안에서도 골목마다 크게 달라요.</>}
+              </p>
             )}
             {profile.reasons.includes("유동 인구가 많아서") && (
-              <p className="m-aside">유동 인구가 많다고 하셨죠. 가게 한 곳의 매출로는 {demandRank}번째예요. 지나가는 사람이 많아도 가게마다 손님이 많다는 뜻은 아니에요.</p>
+              <p className="m-aside"><b>유동 인구가 많다고 하셨죠.</b> 가게 한 곳의 매출로는 {demandRank}번째예요. 지나가는 사람이 많아도 가게마다 손님이 많다는 뜻은 아니에요.</p>
             )}
             <p className="m-src">매출과 폐업률은 서울시 상권분석서비스 2025년의 한식음식점 값이에요. 고깃집만의 매출 통계는 없어요. 고깃집 수는 소상공인 상가정보 2026년 6월 기준이에요. <a href="#/sources">출처 보기</a></p>
             <button type="button" className="m-btn" onClick={() => setTab("budget")}>여는 데 드는 돈 보기</button>
