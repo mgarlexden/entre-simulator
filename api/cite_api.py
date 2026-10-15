@@ -11,8 +11,10 @@ import csv
 import math
 import os
 import re
+import requests
+import xml.etree.ElementTree as ET
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, Query
@@ -111,50 +113,126 @@ def health():
     return {"ok": True, "credible_sources": len(SOURCES)}
 
 
-# ---- KAMIS 원가 조회 (카페 재료비 추적) ----
-KAMIS_PRICES = {
-    "상추": {"min": 3000, "max": 4000, "unit": "원/kg", "prev": 3500},
-    "배추": {"min": 2000, "max": 3000, "unit": "원/kg", "prev": 2500},
-    "무": {"min": 1500, "max": 2500, "unit": "원/kg", "prev": 2000},
-    "당근": {"min": 2000, "max": 3500, "unit": "원/kg", "prev": 2800},
-    "양파": {"min": 2000, "max": 3000, "unit": "원/kg", "prev": 2500},
+# ---- KAMIS 원가 조회 (실시간 도매가) ----
+KAMIS_API_KEY = os.getenv("KAMIS_API_KEY", "")
+KAMIS_URL = "https://www.kamis.go.kr/service/price/xml.do"
+
+# KAMIS 품목 코드 매핑
+KAMIS_PRODUCTS = {
+    "상추": "1103",      # 상추
+    "배추": "1104",      # 배추
+    "무": "1101",        # 무
+    "당근": "1106",      # 당근
+    "양파": "1107",      # 양파
 }
+
+
+def fetch_kamis_price(material: str) -> dict | None:
+    """KAMIS API에서 실시간 도매가 조회"""
+    if material not in KAMIS_PRODUCTS:
+        return None
+
+    product_code = KAMIS_PRODUCTS[material]
+    today = datetime.now()
+    start_day = (today - timedelta(days=7)).strftime("%Y%m%d")  # 7일 전
+    end_day = today.strftime("%Y%m%d")
+
+    params = {
+        "action": "periodProductList",
+        "apikey": KAMIS_API_KEY,
+        "startday": start_day,
+        "endday": end_day,
+        "product": product_code,
+    }
+
+    try:
+        response = requests.get(KAMIS_URL, params=params, timeout=10)
+        response.raise_for_status()
+
+        # XML 파싱
+        root = ET.fromstring(response.content)
+        items = root.findall(".//item")
+
+        if not items:
+            return None
+
+        # 최신 데이터 (가장 최근)
+        latest = items[-1]
+        price_text = latest.findtext("price", "").replace(",", "")
+
+        # 이전 데이터 (7일 전)
+        prev_price_text = items[0].findtext("price", "").replace(",", "")
+
+        try:
+            current_price = int(price_text) if price_text else 0
+            prev_price = int(prev_price_text) if prev_price_text else current_price
+        except ValueError:
+            return None
+
+        if current_price == 0:
+            return None
+
+        # 변동률 계산
+        change = current_price - prev_price
+        change_pct = (change / prev_price * 100) if prev_price > 0 else 0
+
+        trend = "올랐어요" if change > 0 else "내렸어요" if change < 0 else "비슷해요"
+
+        return {
+            "material": material,
+            "current_price": current_price,
+            "prev_price": prev_price,
+            "change": change,
+            "change_pct": round(change_pct, 1),
+            "unit": "원/kg",
+            "trend": trend,
+            "date": latest.findtext("date", ""),
+        }
+    except Exception as e:
+        print(f"KAMIS API 오류: {e}")
+        return None
 
 
 @app.get("/price")
 def get_price(material: str = Query(..., min_length=1, max_length=50)):
-    """KAMIS 도매가 조회: 상추, 배추, 무, 당근, 양파 등
+    """KAMIS 실시간 도매가 조회: 상추, 배추, 무, 당근, 양파 등
 
     응답 예시:
     {
         "material": "상추",
-        "current": {"min": 3000, "max": 4000},
-        "prev": 3500,
+        "current_price": 3500,
+        "prev_price": 3200,
+        "change": 300,
+        "change_pct": 9.4,
         "unit": "원/kg",
-        "trend": "올랐어요"
+        "trend": "올랐어요",
+        "date": "2026-10-15"
     }
     """
     material = material.strip()
 
-    if material not in KAMIS_PRICES:
-        available = ", ".join(KAMIS_PRICES.keys())
+    if material not in KAMIS_PRODUCTS:
+        available = ", ".join(KAMIS_PRODUCTS.keys())
         return {
-            "error": f"'{material}'은 추적하지 않습니다",
+            "error": f"'{material}'은 조회할 수 없습니다",
             "available": available,
         }
 
-    data = KAMIS_PRICES[material]
-    avg_current = (data["min"] + data["max"]) // 2
-    trend = "올랐어요" if avg_current > data["prev"] else "내렸어요" if avg_current < data["prev"] else "비슷해요"
+    if not KAMIS_API_KEY:
+        return {
+            "error": "KAMIS_API_KEY가 설정되지 않았습니다",
+            "info": ".env 파일에 KAMIS_API_KEY를 추가하세요",
+        }
 
-    return {
-        "material": material,
-        "current": {"min": data["min"], "max": data["max"], "avg": avg_current},
-        "prev": data["prev"],
-        "unit": data["unit"],
-        "trend": trend,
-        "date": datetime.now().strftime("%Y-%m-%d"),
-    }
+    result = fetch_kamis_price(material)
+
+    if result is None:
+        return {
+            "error": f"{material}의 도매가를 조회할 수 없습니다",
+            "info": "KAMIS API 응답을 확인하세요",
+        }
+
+    return result
 
 
 # ---- 근거 항목 기반 답변 (pipelines/build_facts.py 가 만든 facts.json) ----
