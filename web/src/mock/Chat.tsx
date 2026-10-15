@@ -1,4 +1,4 @@
-// 궁금한 것 물어보기. 질문은 출처 서버(api/cite_api.py, 포트 8001)의 /ask 로 보내고, 서버가 근거 문장을 골라 그대로 돌려준다.
+// 궁금한 것 물어보기. 질문은 출처 서버(api/cite_api.py, 포트 8000)의 /ask 로 보내고, 서버가 근거 문장을 골라 그대로 돌려준다.
 // 모델이 문장을 만들지 않는다. 화면이 지금의 가게 입력과 시뮬레이션 결과(ctx)를 같이 보내서 "내 가게" 질문에 답한다.
 // 서버가 꺼져 있으면 화면에 이미 있는 숫자(월세, 여는 데 드는 돈, 경쟁)만 이 파일이 직접 답한다.
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import "./cite.css";
 type Cite = { id: string; title: string; publisher: string; year: string; type: string; url: string; note: string };
 type Msg = { who: "me" | "bot"; text: string; cites?: Cite[]; offline?: boolean };
 const ASK = ["내 가게는 몇 달째부터 남기 시작해요?", "여는 데 돈이 제일 많이 드는 곳은 어디예요?", "하루에 몇 명 받아야 본전이에요?", "이 동네 경쟁은 어때요?"];
-const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8001";
+const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8000";
 
 export default function Chat({ profile, store, levers, gus, onClose }: {
   profile: Profile; store: Store; levers: Levers; shocks: ShockId[]; gus: Gu[]; onClose: () => void;
@@ -49,7 +49,7 @@ export default function Chat({ profile, store, levers, gus, onClose }: {
       return `여는 데 드는 ${man(cost.total)} 가운데 ${iga(top[0].label)} ${man(top[0].amount)}으로 가장 커요. 그다음이 ${top[1].label} ${man(top[1].amount)}이에요.`;
     }
     if (/경쟁|고깃집 수|옆 가게/.test(q)) return `${profile.gu}에는 돼지고기 구이 가게가 ${st.pork.toLocaleString("ko-KR")}곳 있어요.`;
-    return "지금은 출처 서버가 꺼져 있어 이 질문에 답하지 못해요. api/cite_api.py를 켜 주세요 (python -m uvicorn api.cite_api:app --port 8001).";
+    return "지금은 출처 서버가 꺼져 있어 이 질문에 답하지 못해요. api/cite_api.py를 켜 주세요 (python -m uvicorn api.cite_api:app --port 8000).";
   };
 
   const send = async (q: string) => {
