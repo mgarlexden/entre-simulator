@@ -29,3 +29,12 @@ html:has(.src) { background: #fff; }
 .eng-btn { padding: 12px 20px; border: 0; border-radius: 10px; background: #256abf; color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; }
 .eng-btn:disabled { background: #9ab4d6; cursor: progress; }
 .eng-btn:focus-visible { outline: 3px solid #0d366b; outline-offset: 2px; }
+
+/* 업종 탭 */
+.src .src-tabs { display: flex; gap: 6px; margin: 18px 0 6px; border-block-end: 2px solid #e5e8eb; }
+.src .src-tabs button { padding: 10px 22px; border: 0; border-radius: 10px 10px 0 0; background: transparent; font: inherit; font-size: 17px; font-weight: 600; color: #6b7684; cursor: pointer; margin-block-end: -2px; border-block-end: 3px solid transparent; }
+.src .src-tabs button.on { color: #2f4fc4; border-block-end-color: #2f4fc4; background: #f4f6fa; }
+.src .src-tabs button:focus-visible { outline: 3px solid #2f4fc4; outline-offset: -3px; }
+.src .src-sub { margin: 6px 0 18px; color: #4e5968; }
+.src small { color: #6b7684; font-size: 13px; }
+.src h2[id] { scroll-margin-top: 12px; }

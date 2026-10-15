@@ -2,6 +2,8 @@
 // Keep this file in step with model.ts: a constant added there gets a row here.
 import { useEffect, useState } from "react";
 import { CATALOG, GRADES, man, type GuData } from "./model";
+import SourcesCafe from "./SourcesCafe";
+import SourcesGogi from "./SourcesGogi";
 import "./sources.css";
 
 type Kind = "실측" | "차용" | "가정" | "예시값";
@@ -115,28 +117,6 @@ const API_KEYS: ApiKey[] = [
     applied: "적용 안 함", note: "필요하면 키 상태 확인. 현재는 없어도 날씨 자료에 지장 없음" },
 ];
 
-const DATASETS = [
-  { name: "서울시 상권분석서비스 (추정매출-상권)", id: "OA-15572", url: "https://data.seoul.go.kr/dataList/OA-15572/S/1/datasetView.do", how: "연도별 파일 내려받기 (인증키 불필요)", status: "연결됨", use: "구별 한식음식점 매출, 결제 건수, 결제 1건 금액, 저녁·주말 비중" },
-  { name: "서울시 상권분석서비스 (점포-상권)", id: "OA-15577", url: "https://data.seoul.go.kr/dataList/OA-15577/S/1/datasetView.do", how: "연도별 파일 내려받기 (인증키 불필요)", status: "연결됨", use: "구별 한식음식점 수, 개업·폐업 수" },
-  { name: "서울시 상권분석서비스 (영역-상권)", id: "OA-15560", url: "https://data.seoul.go.kr/dataList/OA-15560/F/1/datasetView.do", how: "shapefile 내려받기 (인증키 불필요)", status: "연결됨", use: "상권 1,650곳이 어느 구에 속하는지" },
-  { name: "서울 행정구역 경계 (통계청 2013, southkorea/seoul-maps)", id: "GitHub", url: "https://github.com/southkorea/seoul-maps", how: "GitHub 원본 파일", status: "연결됨", use: "지도의 25개 구 모양. 2013년 경계라 최신과 다를 수 있음" },
-  { name: "한국천문연구원 특일 정보", id: "data.go.kr 15012690", url: "https://www.data.go.kr/data/15012690/openapi.do", how: "API (공공데이터포털 키)", status: "연결됨", use: "2026~2027년 공휴일 46일. pipelines/fetch_weather.py가 받아 web/public/mock/holidays.json에 저장" },
-  { name: "기상청 지상(ASOS) 일자료", id: "data.go.kr 15059093", url: "https://www.data.go.kr/data/15059093/openapi.do", how: "API (공공데이터포털 키)", status: "연결됨", use: "서울(108) 2016~2025년 일자료를 달별 비율로 집계해 web/public/mock/weather_seoul.json에 저장. 일자료 원본은 저장하지 않음" },
-  { name: "소상공인시장진흥공단 상가(상권)정보", id: "data.go.kr 15083033", url: "https://www.data.go.kr/data/15083033/fileData.do", how: "파일 내려받기 (인증키 불필요)", status: "연결됨", use: "서울 구별 돼지고기 구이(I20107) 점포 수를 gu_stats.json의 pork 블록에 집계. 원자료 zip(약 350MB)은 저장소에 없음" },
-  { name: "서울시 일반음식점 인허가", id: "OA-16094", url: "https://data.seoul.go.kr/dataList/OA-16094/S/1/datasetView.do", how: "API (서울 열린데이터 키)", status: "미연결", use: "개업일, 폐업일로 생존 기간 계산. 원 레포는 종로구만 처리" },
-  { name: "서울시 상권분석서비스 추정매출-행정동 + 소상공인 상가업소 (행정동 423곳의 한식 매출·점포·돼지구이 수)", id: "VwsmAdstrdSelngW, storeListInDong", url: "https://data.seoul.go.kr/", how: "API (SEOUL_OPEN_DATA_KEY, SBIZ_STORE_KEY). pipelines/build_dong_stats.py가 dong_stats.json 생성", status: "연결됨 (동네 선택에 적용)", use: "동네 고르기: 점포당 매출의 구 안 상대 위치, 요일·분기 지수, 유형(대학·청년/오피스/주거/일반), 고깃집(돼지구이) 수. 한식 전체 기준이고 고깃집 매출은 없음" },
-  { name: "R-ONE 상업용부동산 임대동향 (서울 상권 59곳 임대료, 권리금, 공실률, 전환율)", id: "STATBL T248223134698125 외", url: "https://www.reb.or.kr/r-one/", how: "API (RONE_KEY). pipelines/fetch_rone.py가 rone_rent.json, rent_gu.json 생성", status: "연결됨 (월세·보증금 적용)", use: "상권을 25개 구에 배정해 구별 평당 월세 근사 (24곳 배정, 도봉구는 중앙값으로 채움). 보증금 환산 12개월분을 빼 현금 월세로 사용. 서울 음식점업 권리금 평균 5,580만원(2025)은 아직 미적용" },
-  { name: "KOSIS 외식업체경영실태조사·한식산업실태조사 (2023~2025)", id: "orgId 114, 표 18개", url: "https://kosis.kr/", how: "API (KOSIS_KEY). pipelines/fetch_kosis.py가 kosis_food.json 생성", status: "수집됨 (계산 미적용)", use: "한식·서울권 비용 구성, 개업 투자비(주방·홀), 보증금·권리금, 객단가, 좌석, 인건비, 재방문율. 육류요리 전문점 단독 손익은 없음" },
-  { name: "축산물품질평가원 제주 돼지도체 경락가격", id: "pigJejuGrade", url: "https://www.data.go.kr/data/15057912/openapi.do", how: "API (LIVESTOCK_AUCTION_KEY). pipelines/fetch_jeju_pork.py가 jeju_pork.json 생성", status: "수집됨 (계산 미적용)", use: "2023-01~ 월 가중평균 지육 경락가. 제주 한 곳이라 서울 삼겹 도매가와 단계가 다름 (방향·변동 폭 참고용)" },
-  { name: "상가 임대료 (평당 월세)", id: "서울시 상가임대차 실태조사 2023, R-ONE", url: "", how: "보고서 수치를 팀이 옮겨 적음 (3개 상권 + 서울 평균)", status: "부분 확인", use: "성수, 신촌, 혜화 3곳과 서울 평균만 있음. 25개 구 값이 없어 구별 월세에는 R-ONE 상권 값을 구에 배정해 씀 (위 R-ONE 행 참고)" },
-  { name: "서울시 상가임대차 실태조사 2023 (상권별 월세·보증금·권리금·시설투자비)", id: "팀 자료 F2 경유", url: "", how: "최종보고서 p.14~30 수치를 팀이 옮겨 적음", status: "부분 확인", use: "권리금(항목 자체가 없음), 보증금 개월 수, 시설투자비 검증용. 업종 구분 없는 1층 상가 평균" },
-  { name: "KREI 외식업체 경영실태조사 2025 통계보고서", id: "팀 자료 F1 경유", url: "https://www.krei.re.kr/foodInfo/page/323", how: "팀원이 텍스트 추출본 보유 (커피전문점 행만 옮김)", status: "부분 확인", use: "고깃집(한식 육류요리) 매출·비용 구조 행을 아직 꺼내지 않음. 가장 값싸게 얻을 수 있는 다음 자료" },
-  { name: "한전 전력데이터개방포털 업종별 전력사용량 (서울 서비스업)", id: "팀 자료 F2 경유", url: "", how: "월별 표를 팀이 내려받아 정리", status: "부분 확인", use: "월별 전기요금 계절 지수(봄가을=1, 여름 1.5~1.6). 서비스업 전체 대리 지표" },
-  { name: "고깃집 유튜브 사장님 인터뷰 정성 기준 (21건 + 지인 3곳)", id: "팀 자료 F3, F4", url: "", how: "팀이 자막을 읽고 코딩 (Claude 1차 코딩, 팀원 검토 전)", status: "참고용", use: "숫자 입력값이 아니라 변수 구조와 방향 확인. 생존자 편향, 자동 자막 오인식 가능. 챗봇 답변 근거로 쓰지 않기로 한 결정 유지" },
-  { name: "소상공인 정책자금 상품 정보 (금리, 한도, 자격)", id: "미확인", url: "", how: "출처 미확인", status: "자료 없음", use: "4개 팀 자료 어디에도 없음. 모자란 돈 탭과 대출 이자 계산의 근거가 비어 있음" },
-  { name: "일별 유동 자료 (생활인구, 지하철 승하차)", id: "미확인", url: "", how: "출처 미확인", status: "미연결", use: "날씨, 공휴일 효과 추정용. 제공 형태를 아직 확인하지 않음" },
-];
-
 function rows(d: GuData | null): { title: string; rows: Row[] }[] {
   const seoul = d?.bbq.seoul;
   const src = d ? `서울시 상권분석서비스 ${d._meta.year}년 (${d._meta.quarters[0]}~${d._meta.quarters.at(-1)}), ${d._meta.method}` : "gu_stats.json";
@@ -236,6 +216,8 @@ const VERDICT_CLASS: Record<string, string> = { 채움: "실측", "부분 채움
 export default function Sources() {
   const [d, setD] = useState<GuData | null>(null);
   const [audit, setAudit] = useState<Audit | null>(null);
+  const [tab, setTab] = useState<"gogi" | "cafe">(() => (location.hash.includes("cafe") ? "cafe" : "gogi"));
+  const pick = (k: "gogi" | "cafe") => { setTab(k); window.scrollTo({ top: 0 }); };
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}mock/gu_stats.json`).then((r) => r.json()).then(setD).catch(() => setD(null)); }, []);
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}mock/team_audit.json`).then((r) => r.json()).then(setAudit).catch(() => setAudit(null)); }, []);
   const groups = rows(d);
@@ -247,7 +229,22 @@ export default function Sources() {
     <main className="src">
       <p><a href="#/">ChangeUp 목업으로 돌아가기</a></p>
       <h1>출처와 근거 (운영자용)</h1>
-      <p>화면에 나오는 숫자가 어디서 왔는지 적은 장부입니다. 계산식은 <code>web/src/mock/model.ts</code>에 있고, 기존 시뮬 엔진은 아직 연결하지 않았습니다.</p>
+      <p>화면에 나오는 숫자가 어디서 왔고 얼마나 믿을 수 있는지 적은 장부입니다. 업종별로 나눴습니다. 계산식은 <code>web/src/mock/model.ts</code>와
+        시뮬 엔진 <code>sim/</code>에 있습니다.</p>
+      <div className="src-tabs" role="tablist" aria-label="업종">
+        {(["gogi", "cafe"] as const).map((k) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => pick(k)}>
+            {k === "gogi" ? "고깃집" : "카페"}
+          </button>
+        ))}
+      </div>
+      <p className="src-sub">{tab === "gogi" ? "이 서비스의 화면이 실제로 쓰는 값입니다. 데이터 출처, 탭별 출처, 시뮬레이션 변수, 충분성 검토 순서입니다." : "카페는 아직 화면이 없습니다. 건희 레포의 카페 브랜치가 쓴 데이터, 그 갭, 팀원이 채운 것과 남은 것을 모았습니다."}</p>
+
+      {tab === "cafe" ? <SourcesCafe /> : (
+        <>
+          <SourcesGogi />
+          <h2 id="g-appendix">부록: 기존 장부</h2>
+          <p>아래는 이 페이지를 나누기 전에 쌓아 온 기록입니다. 결정은 날짜순으로 쌓고, 값 표는 화면에 나오는 숫자 단위로 나눴습니다.</p>
 
       <h2>결정 사항</h2>
       <p>정해진 것과 보류한 것을 날짜와 함께 남깁니다. 아래 "보류한 데이터"는 현재 값이 없어 대체값으로 동작하는 항목입니다.</p>
@@ -304,15 +301,6 @@ export default function Sources() {
         </tbody>
       </table>
 
-      <h2>데이터 출처</h2>
-      <table>
-        <thead><tr><th>자료</th><th>번호</th><th>받는 방법</th><th>상태</th><th>쓰는 곳</th></tr></thead>
-        <tbody>
-          {DATASETS.map((s) => (
-            <tr key={s.name}><td>{s.url ? <a href={s.url} target="_blank" rel="noopener">{s.name}</a> : s.name}</td><td>{s.id}</td><td>{s.how}</td><td><b className={`k k-${s.status === "연결됨" ? "실측" : s.status === "자료 없음" ? "예시값" : "가정"}`}>{s.status}</b></td><td>{s.use}</td></tr>
-          ))}
-        </tbody>
-      </table>
       {d && (
         <p>연결된 서울시 자료: {d._meta.year}년 {d._meta.quarters.length}개 분기, {d._meta.generated} 생성, {d._meta.license}. 다시 만들기: <code>python -m pipelines.build_gu_stats --refresh</code>. 주의: {d._meta.caveats.join(" / ")}.</p>
       )}
@@ -383,6 +371,8 @@ export default function Sources() {
             ))}
           </tbody>
         </table>
+      )}
+        </>
       )}
     </main>
   );
