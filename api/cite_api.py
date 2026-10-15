@@ -35,7 +35,7 @@ app = FastAPI(title="출처 검색 (목업 챗봇)")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5174", "http://localhost:5174"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -225,3 +225,9 @@ def ask(q: str = Query(..., min_length=1, max_length=300), k: int = Query(3, ge=
     # 항목이 둘 이상이면 불릿으로 나눠 보여 준다.
     answer = facts_out[0]["text"] if len(facts_out) == 1 else "\n".join(f"• {f['text']}" for f in facts_out)
     return {"answer": answer, "facts": facts_out, "citations": citations}
+
+
+# ---- ChangeUp 확장 (api/ask_ext.py): 우리 근거 합치기, 주제 필터, 화면 값(ctx)으로 즉석 문장, POST /ask ----
+from api import ask_ext  # noqa: E402
+
+ask_ext.install(app)

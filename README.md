@@ -51,3 +51,29 @@ npm run dev -- --port 5174
 - `.env`는 저장소에 올리지 않습니다. `.env.example`만 올라가 있습니다.
 - `research/review/review_sheet.json`(팀 Drive 시트 아이디)은 제외했습니다.
 - `data/processed/licenses*.csv`는 지방행정 인허가 공개 자료로, 상호와 주소가 들어 있습니다.
+
+
+## 엔진 서버 (ChangeUp)
+
+건희 엔진을 얇게 감싼 API입니다. DB와 LLM은 쓰지 않습니다.
+
+```
+pip install fastapi uvicorn simpy numpy pyyaml
+uvicorn api.changeup:app --host 127.0.0.1 --port 8010
+```
+
+- `POST /season/new` 신규 오픈 시작 상태, `POST /season/play` 한 달 진행, `POST /season/run` 6개월과 투자·대출 장부, `POST /venture` 장부만 계산
+- 상태는 서버에 저장하지 않고 요청마다 주고받습니다 (화면의 되감기는 받은 state를 다시 보내면 됩니다)
+- 값 설명: `sim/venture.py`, 신규 오픈 모드: `sim.season.new_season(opening=True)`
+
+## 챗봇 서버 (출처 검색)
+
+```
+python -m uvicorn api.cite_api:app --host 127.0.0.1 --port 8001
+python -m pipelines.build_changeup_facts      # 월세·동네·경영 지표 근거 문장 다시 만들기 (facts_changeup.json)
+python -m tests.ask_eval.run                  # 평가 질문 40개
+```
+
+근거 문장(`facts.json`은 수빈 님, `facts_changeup.json`은 이 저장소)을 검색해 그대로 돌려줍니다. 모델을 쓰지 않습니다.
+`POST /ask {"q": 질문, "ctx": 화면의 가게 입력과 시뮬레이션 결과}` 로 "내 가게" 질문에 답합니다.
+
