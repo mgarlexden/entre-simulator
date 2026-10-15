@@ -124,6 +124,14 @@ KAMIS_PRODUCTS = {
     "무": "1101",        # 무
     "당근": "1106",      # 당근
     "양파": "1107",      # 양파
+    "대파": "1109",      # 대파
+    "시금치": "1108",    # 시금치
+    "쑥갓": "1110",      # 쑥갓
+    "고추": "1111",      # 고추
+    "마늘": "1112",      # 깐마늘
+    "토마토": "1201",    # 토마토
+    "오이": "1202",      # 오이
+    "가지": "1205",      # 가지
 }
 
 
@@ -266,20 +274,33 @@ def fetch_livestock_price(meat: str) -> dict | None:
     # Mock 데이터 (축산물품질평가원 API 연동 대기 중)
     mock_livestock_prices = {
         "돼지고기": {
-            "소매": {"current": 18000, "prev": 17500, "unit": "원/kg"},
-            "도매": {"current": 15000, "prev": 14800, "unit": "원/kg"},
+            "소매": {"current": 18500, "prev": 17800, "unit": "원/kg", "change_pct": 3.9},
+            "도매": {"current": 15200, "prev": 14900, "unit": "원/kg", "change_pct": 2.0},
             "parts": {
-                "삼겹살": {"current": 20000, "prev": 19500, "unit": "원/kg"},
-                "목살": {"current": 12000, "prev": 11800, "unit": "원/kg"},
+                "삼겹살": {"current": 21000, "prev": 20200, "unit": "원/kg"},
+                "목살": {"current": 12800, "prev": 12500, "unit": "원/kg"},
+                "등심": {"current": 18000, "prev": 17300, "unit": "원/kg"},
+                "앞다리": {"current": 14500, "prev": 14000, "unit": "원/kg"},
+                "갈비": {"current": 28000, "prev": 27000, "unit": "원/kg"},
             }
         },
         "소고기": {
-            "소매": {"current": 45000, "prev": 44000, "unit": "원/kg"},
-            "도매": {"current": 38000, "prev": 37500, "unit": "원/kg"},
+            "소매": {"current": 46500, "prev": 45000, "unit": "원/kg", "change_pct": 3.3},
+            "도매": {"current": 39000, "prev": 38000, "unit": "원/kg", "change_pct": 2.6},
+            "parts": {
+                "등심": {"current": 52000, "prev": 50000, "unit": "원/kg"},
+                "안심": {"current": 58000, "prev": 56000, "unit": "원/kg"},
+                "불고기": {"current": 35000, "prev": 34000, "unit": "원/kg"},
+            }
         },
         "닭고기": {
-            "소매": {"current": 8000, "prev": 7800, "unit": "원/kg"},
-            "도매": {"current": 6500, "prev": 6300, "unit": "원/kg"},
+            "소매": {"current": 8200, "prev": 8000, "unit": "원/kg", "change_pct": 2.5},
+            "도매": {"current": 6700, "prev": 6500, "unit": "원/kg", "change_pct": 3.1},
+            "parts": {
+                "닭다리": {"current": 7500, "prev": 7300, "unit": "원/kg"},
+                "닭가슴살": {"current": 9500, "prev": 9200, "unit": "원/kg"},
+                "닭날개": {"current": 8000, "prev": 7800, "unit": "원/kg"},
+            }
         },
     }
 

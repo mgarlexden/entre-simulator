@@ -60,9 +60,9 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
     let offline = false;
 
     // 채소 원가 조회 질문 감지
-    const vegetableMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.test(question);
+    const vegetableMatch = /상추|배추|무|당근|양파|대파|시금치|쑥갓|고추|마늘|토마토|오이|가지|깻잎|채소|야채/.test(question);
     // 축산물 가격 조회 질문 감지
-    const meatMatch = /돼지고기|소고기|닭고기|돼지|소|닭/.test(question);
+    const meatMatch = /돼지고기|소고기|닭고기|돼지|소|닭|육류|고기|축산|부위/.test(question);
 
     if (vegetableMatch) {
       // Mock 데이터 (KAMIS API 테스트용)
@@ -72,19 +72,26 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
         "무": { current: 2000, prev: 1900, unit: "원/kg" },
         "당근": { current: 3000, prev: 2900, unit: "원/kg" },
         "양파": { current: 2500, prev: 2400, unit: "원/kg" },
-        "마늘": { current: 8000, prev: 7500, unit: "원/kg" },
-        "깻잎": { current: 12000, prev: 11000, unit: "원/kg" },
+        "대파": { current: 4500, prev: 4200, unit: "원/kg" },
+        "시금치": { current: 5000, prev: 4800, unit: "원/kg" },
+        "쑥갓": { current: 6000, prev: 5800, unit: "원/kg" },
         "고추": { current: 15000, prev: 14000, unit: "원/kg" },
+        "마늘": { current: 8000, prev: 7500, unit: "원/kg" },
+        "토마토": { current: 4000, prev: 3800, unit: "원/kg" },
+        "오이": { current: 3500, prev: 3400, unit: "원/kg" },
+        "가지": { current: 4500, prev: 4300, unit: "원/kg" },
+        "깻잎": { current: 12000, prev: 11000, unit: "원/kg" },
       };
 
-      const materialMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.exec(question);
+      const materialMatch = /상추|배추|무|당근|양파|대파|시금치|쑥갓|고추|마늘|토마토|오이|가지|깻잎/.exec(question);
       const material = materialMatch ? materialMatch[0] : "";
       const data = mockPrices[material];
 
       if (data) {
         const change = data.current - data.prev;
-        const trend = change > 0 ? "올랐어요" : change < 0 ? "내렸어요" : "비슷해요";
-        apiAnswer = `${material} 도매가: ${data.current.toLocaleString()}${data.unit} (지난주 ${data.prev.toLocaleString()}원)\n변동: ${change > 0 ? '+' : ''}${change.toLocaleString()}원 ${trend}`;
+        const changePct = data.prev > 0 ? ((change / data.prev) * 100).toFixed(1) : '0';
+        const trend = change > 0 ? "올랐어요 📈" : change < 0 ? "내렸어요 📉" : "비슷해요 ➡️";
+        apiAnswer = `🥬 ${material} KAMIS 도매가\n\n현재: ${data.current.toLocaleString()}${data.unit}\n지난주: ${data.prev.toLocaleString()}원\n\n변동: ${change > 0 ? '+' : ''}${change.toLocaleString()}원 (${change > 0 ? '+' : ''}${changePct}%) ${trend}`;
 
         // KAMIS API 출처 조회
         try {
@@ -117,7 +124,9 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
               const trendRetail = d.retail_change > 0 ? '올랐어요' : d.retail_change < 0 ? '내렸어요' : '비슷해요';
               const trendWholesale = d.wholesale_change > 0 ? '올랐어요' : d.wholesale_change < 0 ? '내렸어요' : '비슷해요';
 
-              apiAnswer = `${meat}\n• 소매가: ${d.retail_price.toLocaleString()}${d.unit} (지난주 ${d.retail_prev.toLocaleString()}원) ${changeRetail}${d.retail_change.toLocaleString()}원 ${trendRetail}\n• 도매가: ${d.wholesale_price.toLocaleString()}${d.unit} (지난주 ${d.wholesale_prev.toLocaleString()}원) ${changeWholesale}${d.wholesale_change.toLocaleString()}원 ${trendWholesale}`;
+              const pctRetail = d.retail_prev > 0 ? ((d.retail_change / d.retail_prev) * 100).toFixed(1) : '0';
+              const pctWholesale = d.wholesale_prev > 0 ? ((d.wholesale_change / d.wholesale_prev) * 100).toFixed(1) : '0';
+              apiAnswer = `🔴 ${meat}\n\n📊 소매가(소비자가격)\n  ${d.retail_price.toLocaleString()}${d.unit}\n  지난주: ${d.retail_prev.toLocaleString()}원 대비\n  ${changeRetail}${d.retail_change.toLocaleString()}원 (${changeRetail}${pctRetail}%) ${trendRetail}\n\n📦 도매가(경락가격)\n  ${d.wholesale_price.toLocaleString()}${d.unit}\n  지난주: ${d.wholesale_prev.toLocaleString()}원 대비\n  ${changeWholesale}${d.wholesale_change.toLocaleString()}원 (${changeWholesale}${pctWholesale}%) ${trendWholesale}`;
 
               // 축산물 출처 조회
               try {
