@@ -7,7 +7,7 @@ import "./cite.css";
 type Cite = { id: string; title: string; publisher: string; year: string; type: string; url: string; note: string };
 type Msg = { who: "me" | "bot"; text: string; cites?: Cite[]; offline?: boolean };
 const ASK = ["몇 달째부터 남기 시작해요?", "돈이 제일 많이 드는 곳은 어디예요?", "하루에 몇 명 받아야 본전이에요?", "이 동네 경쟁은 어때요?"];
-const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8001";
+const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8000";
 type Local = { text: string; cq: string };
 
 export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
@@ -43,9 +43,6 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
       return { text: `${profile.gu}에는 돼지고기 구이 가게가 ${st.pork.toLocaleString("ko-KR")}곳 있고, 25개 구 중 ${rankOf(profile.gu, "pork", gus.map((g) => g.name))}번째로 많아요 (소상공인 상가정보 2026년 6월). 한식음식점 전체로 보면 2025년 한 해에 ${st.closure}%가 문을 닫았어요.`, cq: "상가 정보 음식점 폐업 생존" };
     }
     if (/월세|임대/.test(q)) return { text: `${profile.gu}의 평당 월세는 ${st.rent}만원으로 잡았어요. ${store.pyeong}평이면 한 달 ${man(st.rent * store.pyeong)}이에요. 예시값이에요.`, cq: "상가 임대료 임대동향" };
-    if (/상추|배추|무|당근|양파|원가|도매/.test(q)) {
-      return { text: "KAMIS 도매가를 조회 중입니다. 아래에서 확인해 주세요.", cq: q };
-    }
     return null;
   };
   const send = async (q: string) => {
@@ -85,6 +82,17 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
         const change = data.current - data.prev;
         const trend = change > 0 ? "올랐어요" : change < 0 ? "내렸어요" : "비슷해요";
         apiAnswer = `${material} 도매가: ${data.current.toLocaleString()}${data.unit} (지난주 ${data.prev.toLocaleString()}원)\n변동: ${change > 0 ? '+' : ''}${change.toLocaleString()}원 ${trend}`;
+
+        // KAMIS API 출처 조회
+        try {
+          const r = await fetch(`${CITE_API}/cite?q=${encodeURIComponent(material + " KAMIS 도매가")}`);
+          if (r.ok) {
+            const d = await r.json();
+            cites = d.citations ?? [];
+          }
+        } catch {
+          // 근거 조회 실패해도 가격은 표시
+        }
       } else {
         apiMessage = `${material}은 조회할 수 없습니다.\n조회 가능: ${Object.keys(mockPrices).join(", ")}`;
       }
