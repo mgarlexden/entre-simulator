@@ -59,9 +59,12 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
     let apiMessage = "";
     let offline = false;
 
-    // 원가 조회 질문 감지
-    const priceMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.test(question);
-    if (priceMatch) {
+    // 채소 원가 조회 질문 감지
+    const vegetableMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.test(question);
+    // 축산물 가격 조회 질문 감지
+    const meatMatch = /돼지고기|소고기|닭고기|돼지|소|닭/.test(question);
+
+    if (vegetableMatch) {
       // Mock 데이터 (KAMIS API 테스트용)
       const mockPrices: { [key: string]: { current: number; prev: number; unit: string } } = {
         "상추": { current: 3500, prev: 3200, unit: "원/kg" },
@@ -95,6 +98,44 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
         }
       } else {
         apiMessage = `${material}은 조회할 수 없습니다.\n조회 가능: ${Object.keys(mockPrices).join(", ")}`;
+      }
+    } else if (meatMatch) {
+      // 축산물 가격 API 호출
+      try {
+        let meat = "";
+        if (/돼지|돼지고기/.test(question)) meat = "돼지고기";
+        else if (/소(?:고기)?(?!상)/.test(question)) meat = "소고기";
+        else if (/닭|닭고기/.test(question)) meat = "닭고기";
+
+        if (meat) {
+          const r = await fetch(`${CITE_API}/livestock?meat=${encodeURIComponent(meat)}`);
+          if (r.ok) {
+            const d = await r.json();
+            if (!d.error) {
+              const changeRetail = d.retail_change > 0 ? '+' : '';
+              const changeWholesale = d.wholesale_change > 0 ? '+' : '';
+              const trendRetail = d.retail_change > 0 ? '올랐어요' : d.retail_change < 0 ? '내렸어요' : '비슷해요';
+              const trendWholesale = d.wholesale_change > 0 ? '올랐어요' : d.wholesale_change < 0 ? '내렸어요' : '비슷해요';
+
+              apiAnswer = `${meat}\n• 소매가: ${d.retail_price.toLocaleString()}${d.unit} (지난주 ${d.retail_prev.toLocaleString()}원) ${changeRetail}${d.retail_change.toLocaleString()}원 ${trendRetail}\n• 도매가: ${d.wholesale_price.toLocaleString()}${d.unit} (지난주 ${d.wholesale_prev.toLocaleString()}원) ${changeWholesale}${d.wholesale_change.toLocaleString()}원 ${trendWholesale}`;
+
+              // 축산물 출처 조회
+              try {
+                const r2 = await fetch(`${CITE_API}/cite?q=${encodeURIComponent(meat + " 축산물품질평가원 경락가격")}`);
+                if (r2.ok) {
+                  const d2 = await r2.json();
+                  cites = d2.citations ?? [];
+                }
+              } catch {
+                // 근거 조회 실패해도 가격은 표시
+              }
+            } else {
+              apiMessage = d.error;
+            }
+          }
+        }
+      } catch {
+        offline = true;
       }
     } else {
       try {

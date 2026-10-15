@@ -235,6 +235,116 @@ def get_price(material: str = Query(..., min_length=1, max_length=50)):
     return result
 
 
+# ---- 축산물 도/소매가 조회 ----
+MEAT_PRICE_API_KEY = os.getenv("MEAT_PRICE_API_KEY", "")
+LIVESTOCK_URL = "https://www1.livestock.go.kr/api"
+
+# 축산물 품목 코드 매핑 (축산물품질평가원)
+LIVESTOCK_PRODUCTS = {
+    "돼지고기": "02",      # 돼지고기
+    "소고기": "01",        # 소고기
+    "닭고기": "03",        # 닭고기
+}
+
+# 부위별 코드 (돼지고기 기준)
+PORK_CUTS = {
+    "삼겹살": "0201",
+    "목살": "0202",
+    "등심": "0203",
+    "앞다리": "0204",
+}
+
+
+def fetch_livestock_price(meat: str) -> dict | None:
+    """축산물품질평가원 API에서 축산물 가격 조회 (Mock 데이터 버전)
+
+    실제 API 연동: https://www1.livestock.go.kr/api/
+    """
+    if meat not in LIVESTOCK_PRODUCTS:
+        return None
+
+    # Mock 데이터 (축산물품질평가원 API 연동 대기 중)
+    mock_livestock_prices = {
+        "돼지고기": {
+            "소매": {"current": 18000, "prev": 17500, "unit": "원/kg"},
+            "도매": {"current": 15000, "prev": 14800, "unit": "원/kg"},
+            "parts": {
+                "삼겹살": {"current": 20000, "prev": 19500, "unit": "원/kg"},
+                "목살": {"current": 12000, "prev": 11800, "unit": "원/kg"},
+            }
+        },
+        "소고기": {
+            "소매": {"current": 45000, "prev": 44000, "unit": "원/kg"},
+            "도매": {"current": 38000, "prev": 37500, "unit": "원/kg"},
+        },
+        "닭고기": {
+            "소매": {"current": 8000, "prev": 7800, "unit": "원/kg"},
+            "도매": {"current": 6500, "prev": 6300, "unit": "원/kg"},
+        },
+    }
+
+    if meat not in mock_livestock_prices:
+        return None
+
+    data = mock_livestock_prices[meat]
+
+    # 소매가를 기본으로 반환
+    retail = data["소매"]
+    wholesale = data["도매"]
+
+    change_retail = retail["current"] - retail["prev"]
+    change_wholesale = wholesale["current"] - wholesale["prev"]
+
+    return {
+        "meat": meat,
+        "retail_price": retail["current"],
+        "retail_prev": retail["prev"],
+        "retail_change": change_retail,
+        "wholesale_price": wholesale["current"],
+        "wholesale_prev": wholesale["prev"],
+        "wholesale_change": change_wholesale,
+        "unit": "원/kg",
+        "date": datetime.now().strftime("%Y-%m-%d"),
+    }
+
+
+@app.get("/livestock")
+def get_livestock_price(meat: str = Query(..., min_length=1, max_length=50)):
+    """축산물 가격 조회: 돼지고기, 소고기, 닭고기
+
+    응답 예시:
+    {
+        "meat": "돼지고기",
+        "retail_price": 18000,
+        "retail_prev": 17500,
+        "retail_change": 500,
+        "wholesale_price": 15000,
+        "wholesale_prev": 14800,
+        "wholesale_change": 200,
+        "unit": "원/kg",
+        "date": "2026-10-15"
+    }
+    """
+    meat = meat.strip()
+
+    if meat not in LIVESTOCK_PRODUCTS:
+        available = ", ".join(LIVESTOCK_PRODUCTS.keys())
+        return {
+            "error": f"'{meat}'은 조회할 수 없습니다",
+            "available": available,
+        }
+
+    result = fetch_livestock_price(meat)
+
+    if result is None:
+        return {
+            "error": f"{meat}의 가격을 조회할 수 없습니다",
+            "info": "축산물품질평가원 API 응답을 확인하세요",
+        }
+
+    return result
+
+
 # ---- 근거 항목 기반 답변 (pipelines/build_facts.py 가 만든 facts.json) ----
 FACTS_PATH = ROOT / "web" / "public" / "mock" / "facts.json"
 
