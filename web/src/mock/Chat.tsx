@@ -7,7 +7,7 @@ import "./cite.css";
 type Cite = { id: string; title: string; publisher: string; year: string; type: string; url: string; note: string };
 type Msg = { who: "me" | "bot"; text: string; cites?: Cite[]; offline?: boolean };
 const ASK = ["몇 달째부터 남기 시작해요?", "돈이 제일 많이 드는 곳은 어디예요?", "하루에 몇 명 받아야 본전이에요?", "이 동네 경쟁은 어때요?"];
-const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8001";
+const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8000";
 type Local = { text: string; cq: string };
 
 export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
@@ -63,22 +63,29 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
     let offline = false;
 
     // 원가 조회 질문 감지
-    const priceMatch = /상추|배추|무|당근|양파/.exec(question);
+    const priceMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.exec(question);
     if (priceMatch) {
-      try {
-        const material = priceMatch[0];
-        const r = await fetch(`${CITE_API}/price?material=${encodeURIComponent(material)}`);
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const d = await r.json();
-        if (d.error) {
-          apiMessage = `${d.error}\n조회 가능: ${d.available}`;
-        } else {
-          const { min, max, avg } = d.current;
-          const trend = d.trend;
-          apiAnswer = `${d.material} 도매가: ${min.toLocaleString()}~${max.toLocaleString()}원/kg (평균 ${avg.toLocaleString()}원)\n지난주 대비 ${trend}`;
-        }
-      } catch {
-        offline = true;
+      // Mock 데이터 (KAMIS API 테스트용)
+      const mockPrices: { [key: string]: { current: number; prev: number; unit: string } } = {
+        "상추": { current: 3500, prev: 3200, unit: "원/kg" },
+        "배추": { current: 2500, prev: 2800, unit: "원/kg" },
+        "무": { current: 2000, prev: 1900, unit: "원/kg" },
+        "당근": { current: 3000, prev: 2900, unit: "원/kg" },
+        "양파": { current: 2500, prev: 2400, unit: "원/kg" },
+        "마늘": { current: 8000, prev: 7500, unit: "원/kg" },
+        "깻잎": { current: 12000, prev: 11000, unit: "원/kg" },
+        "고추": { current: 15000, prev: 14000, unit: "원/kg" },
+      };
+
+      const material = priceMatch[0];
+      const data = mockPrices[material];
+
+      if (data) {
+        const change = data.current - data.prev;
+        const trend = change > 0 ? "올랐어요" : change < 0 ? "내렸어요" : "비슷해요";
+        apiAnswer = `${material} 도매가: ${data.current.toLocaleString()}${data.unit} (지난주 ${data.prev.toLocaleString()}원)\n변동: ${change > 0 ? '+' : ''}${change.toLocaleString()}원 ${trend}`;
+      } else {
+        apiMessage = `${material}은 조회할 수 없습니다.\n조회 가능: ${Object.keys(mockPrices).join(", ")}`;
       }
     } else {
       try {
