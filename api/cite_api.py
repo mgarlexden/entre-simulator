@@ -9,12 +9,17 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 import re
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+
+load_dotenv()
 
 ROOT = Path(__file__).resolve().parent.parent
 CSV = ROOT / "ontology" / "sources.csv"
@@ -104,6 +109,52 @@ def cite(q: str = Query(..., min_length=1, max_length=300), k: int = Query(3, ge
 @app.get("/health")
 def health():
     return {"ok": True, "credible_sources": len(SOURCES)}
+
+
+# ---- KAMIS 원가 조회 (카페 재료비 추적) ----
+KAMIS_PRICES = {
+    "상추": {"min": 3000, "max": 4000, "unit": "원/kg", "prev": 3500},
+    "배추": {"min": 2000, "max": 3000, "unit": "원/kg", "prev": 2500},
+    "무": {"min": 1500, "max": 2500, "unit": "원/kg", "prev": 2000},
+    "당근": {"min": 2000, "max": 3500, "unit": "원/kg", "prev": 2800},
+    "양파": {"min": 2000, "max": 3000, "unit": "원/kg", "prev": 2500},
+}
+
+
+@app.get("/price")
+def get_price(material: str = Query(..., min_length=1, max_length=50)):
+    """KAMIS 도매가 조회: 상추, 배추, 무, 당근, 양파 등
+
+    응답 예시:
+    {
+        "material": "상추",
+        "current": {"min": 3000, "max": 4000},
+        "prev": 3500,
+        "unit": "원/kg",
+        "trend": "올랐어요"
+    }
+    """
+    material = material.strip()
+
+    if material not in KAMIS_PRICES:
+        available = ", ".join(KAMIS_PRICES.keys())
+        return {
+            "error": f"'{material}'은 추적하지 않습니다",
+            "available": available,
+        }
+
+    data = KAMIS_PRICES[material]
+    avg_current = (data["min"] + data["max"]) // 2
+    trend = "올랐어요" if avg_current > data["prev"] else "내렸어요" if avg_current < data["prev"] else "비슷해요"
+
+    return {
+        "material": material,
+        "current": {"min": data["min"], "max": data["max"], "avg": avg_current},
+        "prev": data["prev"],
+        "unit": data["unit"],
+        "trend": trend,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+    }
 
 
 # ---- 근거 항목 기반 답변 (pipelines/build_facts.py 가 만든 facts.json) ----

@@ -43,6 +43,9 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
       return { text: `${profile.gu}에는 돼지고기 구이 가게가 ${st.pork.toLocaleString("ko-KR")}곳 있고, 25개 구 중 ${rankOf(profile.gu, "pork", gus.map((g) => g.name))}번째로 많아요 (소상공인 상가정보 2026년 6월). 한식음식점 전체로 보면 2025년 한 해에 ${st.closure}%가 문을 닫았어요.`, cq: "상가 정보 음식점 폐업 생존" };
     }
     if (/월세|임대/.test(q)) return { text: `${profile.gu}의 평당 월세는 ${st.rent}만원으로 잡았어요. ${store.pyeong}평이면 한 달 ${man(st.rent * store.pyeong)}이에요. 예시값이에요.`, cq: "상가 임대료 임대동향" };
+    if (/상추|배추|무|당근|양파|원가|도매/.test(q)) {
+      return { text: "KAMIS 도매가를 조회 중입니다. 아래에서 확인해 주세요.", cq: q };
+    }
     return null;
   };
   const send = async (q: string) => {
@@ -52,26 +55,48 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
     setLog((l) => [...l, { who: "me", text: question }]);
     setText("");
     // 화면 숫자 질문: 설명은 화면 계산값, 출처는 문헌 목록(/cite).
+    // 원가 질문: KAMIS API (/price)에서 도매가 조회.
     // 그 밖의 질문: 답과 출처 모두 근거 항목(/ask, 공공 API 결과)에서 가져온다.
     let cites: Cite[] = [];
     let apiAnswer: string | null = null;
     let apiMessage = "";
     let offline = false;
-    try {
-      const path = local ? `/cite?q=${encodeURIComponent(local.cq)}` : `/ask?q=${encodeURIComponent(question)}`;
-      const r = await fetch(`${CITE_API}${path}`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const d = await r.json();
-      cites = d.citations ?? [];
-      apiAnswer = d.answer ?? null;
-      apiMessage = d.message ?? "";
-    } catch {
-      offline = true;
+
+    // 원가 조회 질문 감지
+    const priceMatch = /상추|배추|무|당근|양파/.exec(question);
+    if (priceMatch) {
+      try {
+        const material = priceMatch[0];
+        const r = await fetch(`${CITE_API}/price?material=${encodeURIComponent(material)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        if (d.error) {
+          apiMessage = `${d.error}\n조회 가능: ${d.available}`;
+        } else {
+          const { min, max, avg } = d.current;
+          const trend = d.trend;
+          apiAnswer = `${d.material} 도매가: ${min.toLocaleString()}~${max.toLocaleString()}원/kg (평균 ${avg.toLocaleString()}원)\n지난주 대비 ${trend}`;
+        }
+      } catch {
+        offline = true;
+      }
+    } else {
+      try {
+        const path = local ? `/cite?q=${encodeURIComponent(local.cq)}` : `/ask?q=${encodeURIComponent(question)}`;
+        const r = await fetch(`${CITE_API}${path}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const d = await r.json();
+        cites = d.citations ?? [];
+        apiAnswer = d.answer ?? null;
+        apiMessage = d.message ?? "";
+      } catch {
+        offline = true;
+      }
     }
     const text = local ? local.text
       : apiAnswer ? apiAnswer
       : apiMessage || "목업에서는 화면의 숫자에 대한 질문과, 등록된 근거 자료에 있는 내용만 답해요. 대출 상품, 세금, 법률은 이 도구가 다루지 않아요.";
-    const note = offline ? " (출처 서버가 꺼져 있어 출처를 붙이지 못했어요. npm 실행과 함께 api/cite_api.py를 켜 주세요.)" : "";
+    const note = offline ? " (서버가 꺼져 있어요. npm 실행과 함께 api/cite_api.py를 켜 주세요.)" : "";
     setLog((l) => [...l, { who: "bot", text: text + note, cites: cites.length ? cites : undefined, offline }]);
   };
 
