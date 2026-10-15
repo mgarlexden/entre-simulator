@@ -7,7 +7,7 @@ import "./cite.css";
 type Cite = { id: string; title: string; publisher: string; year: string; type: string; url: string; note: string };
 type Msg = { who: "me" | "bot"; text: string; cites?: Cite[]; offline?: boolean };
 const ASK = ["몇 달째부터 남기 시작해요?", "돈이 제일 많이 드는 곳은 어디예요?", "하루에 몇 명 받아야 본전이에요?", "이 동네 경쟁은 어때요?"];
-const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8000";
+const CITE_API = (import.meta.env.VITE_CITE_API as string | undefined) ?? "http://127.0.0.1:8001";
 type Local = { text: string; cq: string };
 
 export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
@@ -63,7 +63,7 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
     let offline = false;
 
     // 원가 조회 질문 감지
-    const priceMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.exec(question);
+    const priceMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.test(question);
     if (priceMatch) {
       // Mock 데이터 (KAMIS API 테스트용)
       const mockPrices: { [key: string]: { current: number; prev: number; unit: string } } = {
@@ -77,7 +77,8 @@ export default function Chat({ profile, store, levers, shocks, gus, onClose }: {
         "고추": { current: 15000, prev: 14000, unit: "원/kg" },
       };
 
-      const material = priceMatch[0];
+      const materialMatch = /상추|배추|무|당근|양파|마늘|깻잎|고추/.exec(question);
+      const material = materialMatch ? materialMatch[0] : "";
       const data = mockPrices[material];
 
       if (data) {
