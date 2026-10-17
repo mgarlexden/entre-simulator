@@ -1,10 +1,15 @@
 // The pre-founder flow (mock): 내 조건 → 동네 분석 → 가게 꾸미기 (위험 신호 점검 포함) → 시뮬레이션. See DESIGN.md.
 import { Suspense, lazy, useEffect, useState } from "react";
-import { DEFAULT_LEVERS, DEFAULT_PROFILE, recommend, setAreaInput, setDongData, setGuData, setRentData, setRentInput, starterStore, type Gu, type Levers, type Profile, type Store } from "./model";
+import { DEFAULT_LEVERS, DEFAULT_PROFILE, emptyStore, setAreaInput, setDongData, setGrowth, setGuData, setKrei, setRentData, setRentInput, type Gu, type Levers, type Profile, type Store } from "./model";
 import ProfileStep from "./Profile";
+import { setAreaData, useIndustry } from "./area";
 import Analysis from "./Analysis";
 import Chat from "./Chat";
+import CafeBuild from "./CafeBuild";
+import CafeSim from "./CafeSim";
+import type { CafeCfg } from "./cafeChecks";
 import "./mock.css";
+import "./analysis.css";
 
 const Builder = lazy(() => import("./Builder"));
 const Simulate = lazy(() => import("./SimulateEngine"));
@@ -21,27 +26,32 @@ export default function Mock() {
   const [step, setStep] = useState<Step>("profile");
   const [reached, setReached] = useState(0);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
-  const [store, setStoreRaw] = useState<Store>(() => starterStore());
+  const [store, setStoreRaw] = useState<Store>(() => emptyStore());
   const [levers, setLevers] = useState<Levers>(DEFAULT_LEVERS);
-  const [edited, setEdited] = useState(false);
-  const setStore = (s: Store) => { setEdited(true); setStoreRaw(s); };
+  const setStore = (s: Store) => setStoreRaw(s);
   const [gus, setGus] = useState<Gu[]>([]);
   const [ready, setReady] = useState(false);
   const [chat, setChat] = useState(false);
+  const [cafeCfg, setCafeCfg] = useState<CafeCfg | null>(null);
 
+  const ind = profile.industry;
   useEffect(() => {
     const get = (f: string) => fetch(`${import.meta.env.BASE_URL}mock/${f}`).then((r) => r.json());
+    const cafe = ind === "cafe";
+    let alive = true; // 업종을 빠르게 바꿔도 늦게 도착한 이전 업종의 자료가 덮어쓰지 않게
+    setReady(false);
     const rent = get("rent_gu.json").catch(() => null); // 없으면 월세는 예시값으로 돌아간다
-    const dong = get("dong_stats.json").catch(() => null); // 없으면 동네 고르기를 숨긴다
-    Promise.all([get("seoul_gu.json"), get("gu_stats.json"), rent, dong]).then(([g, d, r, dn]) => { setGuData(d); setRentData(r); setDongData(dn); setGus(g); setReady(true); }).catch(() => setReady(true));
-  }, []);
-
-  useEffect(() => {
-    if (!ready || edited) return;
-    const plan = recommend(profile);
-    setStoreRaw(plan.store);
-    setLevers((l) => ({ ...l, staff: plan.staff }));
-  }, [ready, edited, profile.gu, profile.capital]); // eslint-disable-line react-hooks/exhaustive-deps
+    const dong = get(cafe ? "cafe_dong_stats.json" : "dong_stats.json").catch(() => null); // 없으면 동네 고르기를 숨긴다
+    const krei = cafe ? Promise.resolve(null) : get("gogi_krei.json").catch(() => null);        // 없으면 한식음식점 기준으로 돌아간다
+    const growth = cafe ? Promise.resolve(null) : get("growth.json").catch(() => null);         // 없으면 성장률을 숨긴다. 카페는 2024년 구 매출이 없다
+    const prof = get(cafe ? "cafe_dong_profile.json" : "dong_profile.json").catch(() => null);     // 없으면 동네 지도와 '~형 상권'을 숨긴다
+    const geo = get("seoul_dong.json").catch(() => null);
+    Promise.all([get("seoul_gu.json"), get("gu_stats.json"), rent, dong, krei, growth, prof, geo]).then(([g, d, r, dn, k, gr, pf, ge]) => {
+      useIndustry(ind); // 아래 set*보다 먼저: 구 통계가 업종 블록을 고른다
+      if (!alive) return; setGuData(d); setRentData(r); setDongData(dn); setKrei(k); setGrowth(gr); setAreaData(pf, ge?.dong ?? null); setGus(g); setReady(true);
+    }).catch(() => alive && setReady(true));
+    return () => { alive = false; };
+  }, [ind]);
 
   const go = (s: Step) => {
     setStep(s);
@@ -77,13 +87,15 @@ export default function Mock() {
 
       {!ready && <p className="m-loading">자료를 불러오는 중이에요</p>}
       {ready && step === "profile" && <ProfileStep profile={profile} setProfile={setProfile} gus={gus} onDone={() => go("area")} />}
-      {ready && step === "area" && <Analysis profile={profile} setProfile={setProfile} gus={gus} store={store} onNext={() => go("build")} />}
-      {ready && step === "build" && (
+      {ready && step === "area" && <Analysis profile={profile} setProfile={setProfile} gus={gus} onNext={() => go("build")} />}
+      {ready && ind === "cafe" && step === "build" && <CafeBuild profile={profile} cfg={cafeCfg} setCfg={setCafeCfg} onNext={() => go("sim")} />}
+      {ready && ind === "cafe" && step === "sim" && <CafeSim profile={profile} cfg={cafeCfg ?? { pyeong: 20, grade: "basic", staff: 1 }} onBack={() => go("build")} />}
+      {ready && ind === "bbq" && step === "build" && (
         <Suspense fallback={<p className="m-loading">가게 도면을 펴는 중이에요</p>}>
           <Builder profile={profile} store={store} setStore={setStore} levers={levers} setLevers={setLevers} onNext={() => go("sim")} />
         </Suspense>
       )}
-      {ready && step === "sim" && (
+      {ready && ind === "bbq" && step === "sim" && (
         <Suspense fallback={<p className="m-loading">가게 문을 여는 중이에요</p>}>
           <Simulate profile={profile} store={store} levers={levers} setLevers={setLevers} onBack={() => go("build")} />
         </Suspense>

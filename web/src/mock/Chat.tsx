@@ -24,7 +24,7 @@ export default function Chat({ profile, store, levers, gus, onClose }: {
   const context = () => {
     const st = guStat(profile.gu);
     const s = storeStats(store);
-    const cost = openingCost(store, profile.gu);
+    const cost = openingCost(store, profile.gu, profile.keyMoney ?? 0);
     const engine = getEngineCtx();
     return {
       gu: profile.gu, dong: st.area ?? undefined, area_type: st.areaType ?? undefined,
@@ -44,7 +44,7 @@ export default function Chat({ profile, store, levers, gus, onClose }: {
     const st = guStat(profile.gu);
     if (/월세|임대/.test(q)) return `${profile.gu}${st.area ? ` ${st.area}` : ""}의 평당 월세는 ${st.rent}만원으로 잡았어요. ${store.pyeong}평이면 한 달 ${man(st.rent * store.pyeong)}이에요.`;
     if (/많이 드는|여는 데|오픈 비용|창업 비용|개업 비용/.test(q)) {
-      const cost = openingCost(store, profile.gu);
+      const cost = openingCost(store, profile.gu, profile.keyMoney ?? 0);
       const top = [...cost.lines].sort((a, b) => b.amount - a.amount);
       return `여는 데 드는 ${man(cost.total)} 가운데 ${iga(top[0].label)} ${man(top[0].amount)}으로 가장 커요. 그다음이 ${top[1].label} ${man(top[1].amount)}이에요.`;
     }

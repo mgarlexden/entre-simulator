@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { FOOD_SHARE, STATUS_LABEL, checks, man, settledNet, simulate, storeStats, sunkCost, type Levers, type Profile, type Status, type Store } from "./model";
 
-function Mark({ s }: { s: Status }) {
+export function Mark({ s }: { s: Status }) {
   return (
     <svg className={`m-mark is-${s}`} viewBox="0 0 20 20" aria-hidden="true">
       {s === "ok" && <><circle cx="10" cy="10" r="9" /><path d="M5.5 10.5l3 3 6-6.5" /></>}
@@ -19,9 +19,9 @@ export default function Checks({ profile, store, levers }: { profile: Profile; s
     list: checks(profile, store, levers),
   }), [profile, store, levers]);
   const stats = storeStats(store);
-  const sunk = sunkCost(store, profile.gu);
+  const sunk = sunkCost(store, profile.gu, profile.keyMoney ?? 0);
   const headline = stats.seats === 0
-    ? <>테이블이 없어서 <mark>손님을 받을 수 없어요.</mark></>
+    ? <>아직 테이블이 없어요. <mark>가게를 꾸미면</mark> 점검이 채워져요.</>
     : net <= 0
       ? <>이 구성은 자리가 잡혀도 한 달에 <mark>{man(-net)}씩 줄어요.</mark></>
       : <>자리가 잡히면 한 달에 <mark>{man(net)}</mark>이 남아요.</>;
@@ -31,7 +31,8 @@ export default function Checks({ profile, store, levers }: { profile: Profile; s
       <p className="m-eyebrow" id="checks-h">열기 전 점검</p>
       <h1>{headline}</h1>
       <p className="m-sub">{profile.gu}, {store.pyeong}평, {stats.seats}석, 직원 {levers.staff}명 기준이에요. 여는 데 {man(sunk)}과 보증금이 들어요. 가게나 직원 수를 바꾸면 바로 다시 계산해요.</p>
-      <ul className="m-checklist">
+      {stats.seats === 0 && <p className="m-aside">테이블을 놓거나 위쪽의 '추천 배치'를 누르면 다섯 가지 질문의 답이 나와요.</p>}
+      {stats.seats > 0 && <ul className="m-checklist">
         {list.map((c) => (
           <li key={c.key}>
             <Mark s={c.status} />
@@ -48,7 +49,7 @@ export default function Checks({ profile, store, levers }: { profile: Profile; s
             </div>
           </li>
         ))}
-      </ul>
+      </ul>}
       <p className="m-aside">
         식재료비는 매출의 약 {Math.round(FOOD_SHARE * (19000 / levers.price) * 100)}%로 잡았어요. 서울권 음식점 평균은 39.3%예요
         (한국농촌경제연구원 2025년 조사. 술과 음료가 들어 있고 고깃집만의 값은 아니에요). 고기 값은 한 인분 원가에서 따로 계산해서, 고깃값이 오르면 그만큼 올라가요.

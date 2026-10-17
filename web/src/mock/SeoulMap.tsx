@@ -11,7 +11,7 @@ export default function SeoulMap({ gus, metric, selected, onSelect }: {
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [tip, setTip] = useState<{ name: string; x: number; y: number } | null>(null);
-  const vals = Object.fromEntries(gus.map((g) => [g.name, guStat(g.name)[metric]]));
+  const vals: Record<string, number> = Object.fromEntries(gus.map((g) => [g.name, guStat(g.name)[metric] ?? 0]));
   const all = Object.values(vals);
   const lo = Math.min(...all), hi = Math.max(...all);
   const step = (name: string) => rampIndex(hi > lo ? (vals[name] - lo) / (hi - lo) : 0.5);

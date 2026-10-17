@@ -31,8 +31,18 @@
 .sx-bar span { font-size: 15px; color: #33465f; }
 /* 왼쪽: 실시간 현금 그래프 */
 .sx-ctoggle { position: absolute; top: 74px; left: 12px; z-index: 3; padding: 8px 14px; border: 1px solid #c3d0e2; border-radius: 10px; background: rgba(255,255,255,.92); font-size: 14px; cursor: pointer; }
-.sx-chartpanel { position: absolute; top: 116px; left: 12px; z-index: 3; width: 360px; max-width: calc(100% - 24px); padding: 12px 12px 10px; border-radius: 14px;
+.sx-leftcol { position: absolute; top: 116px; left: 12px; bottom: 76px; z-index: 3; width: 360px; max-width: calc(100% - 24px); display: grid; gap: 10px; align-content: start; overflow-y: auto; pointer-events: none; }
+.sx-leftcol > * { pointer-events: auto; }
+.sx-chartpanel, .sx-planpanel { padding: 12px 12px 10px; border-radius: 14px;
   background: rgba(255,255,255,.94); box-shadow: 0 4px 16px rgba(20,35,58,.16); display: grid; gap: 6px; }
+.sx-planpanel dl { margin: 0; display: grid; gap: 2px; }
+.sx-planpanel dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; line-height: 1.5; padding: 2px 0; }
+.sx-planpanel dt { color: #5b6b82; }
+.sx-planpanel dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.sx-planpanel .is-changed dt, .sx-planpanel .is-changed dd { color: #256abf; }
+.sx-planpanel .is-changed dd { font-weight: 700; }
+.sx-planpanel small { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #5b6b82; }
+.sx-planpanel small i { inline-size: 8px; block-size: 8px; border-radius: 50%; background: #256abf; }
 .sx-panel-h { margin: 0; display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: #5b6b82; }
 .sx-panel-h b { font-size: 18px; color: #14233a; font-variant-numeric: tabular-nums; }
 .sx-chartpanel small { font-size: 12px; color: #5b6b82; }
@@ -184,7 +194,7 @@
   .sx-split, .sx-settle { grid-template-columns: 1fr; }
   .sx-dps { grid-template-columns: 1fr; }
   .sx-receipt { width: min(300px, calc(100% - 24px)); }
-  .sx-chartpanel { width: min(320px, calc(100% - 24px)); }
+  .sx-leftcol { width: min(320px, calc(100% - 24px)); }
   .sx-hud { gap: 6px 14px; }
   .sx-scroll { padding: 20px 18px 16px; }
   .sx-foot { padding: 12px 18px; }

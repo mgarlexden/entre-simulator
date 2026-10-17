@@ -335,7 +335,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
 }) {
   const st = guStat(profile.gu);
   const stats = storeStats(store);
-  const cost = useMemo(() => openingCost(store, profile.gu), [store, profile.gu]);
+  const cost = useMemo(() => openingCost(store, profile.gu, profile.keyMoney ?? 0), [store, profile.gu, profile.keyMoney]);
   const startCash = (profile.capital + store.loan - cost.total) * 1e4; // 원
   const interest = (store.loan * 1e4 * LOAN_RATE) / 12;
   const draw = OWNER_DRAW * 1e4;
@@ -387,7 +387,8 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
   }, []);
 
   const spec = () => ({
-    gu_sales_man: st.sales, pyeong: store.pyeong, tables: Math.max(1, stats.tables), seats: stats.seats, cash_rent_man_per_pyeong: st.rent,
+    gu_sales_man: st.salesHansik, // 엔진 기준 점포(대학로 고깃집)가 한식음식점 평균에 맞춰져 있어 한식 기준 값을 준다 (육류 배율을 또 곱하면 두 번 센다)
+    pyeong: store.pyeong, tables: Math.max(1, stats.tables), seats: stats.seats, cash_rent_man_per_pyeong: st.rent,
     staff: plan.staff_per_shift, price: plan.meat_price, baseline_runs: 150, quarter_index: st.qidx, area_type: st.areaType ?? "일반",
     start_month: startMonth,
   });
@@ -571,14 +572,34 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
       <button type="button" className="sx-ctoggle" aria-expanded={chartOpen} onClick={() => setChartOpen((v) => !v)}>
         {chartOpen ? "현금 그래프 접기" : "현금 그래프 펴기"}
       </button>
-      {chartOpen && (
-        <aside className="sx-chartpanel" aria-label="남은 현금 그래프">
-          <p className="sx-panel-h"><span>남은 현금</span><b>{man(won(cashNow))}</b></p>
-          <CashChart compact start={cashAtStart.current[0] ?? startCash} labels={monthSeq}
-            months={done.map((m, i) => (i === done.length - 1 ? { ...m, days: m.days.slice(0, dayIdx + 1) } : m))} />
-          <small>점선은 문 연 날의 현금, 빨간 선은 0원이에요.</small>
-        </aside>
-      )}
+      <div className="sx-leftcol">
+        {chartOpen && (
+          <aside className="sx-chartpanel" aria-label="남은 현금 그래프">
+            <p className="sx-panel-h"><span>남은 현금</span><b>{man(won(cashNow))}</b></p>
+            <CashChart compact start={cashAtStart.current[0] ?? startCash} labels={monthSeq}
+              months={done.map((m, i) => (i === done.length - 1 ? { ...m, days: m.days.slice(0, dayIdx + 1) } : m))} />
+            <small>점선은 문 연 날의 현금, 빨간 선은 0원이에요.</small>
+          </aside>
+        )}
+        {cur && (view === null || view === "settle") && (
+          <aside className="sx-planpanel" aria-label={`${cur.result.month}월 운영 계획`}>
+            <p className="sx-panel-h"><span>{cur.result.month}월 운영 계획</span></p>
+            <dl>
+              {LEVERS.map((lv) => {
+                const before = done.length > 1 ? done[done.length - 2].plan : null;
+                const changed = before !== null && before[lv.key] !== cur.plan[lv.key];
+                return (
+                  <div key={lv.key} className={changed ? "is-changed" : undefined}>
+                    <dt>{lv.label}</dt>
+                    <dd>{lv.text(cur.plan)}</dd>
+                  </div>
+                );
+              })}
+            </dl>
+            {done.length > 1 && <small><i aria-hidden="true" />파란색은 지난달과 달라진 조건이에요.</small>}
+          </aside>
+        )}
+      </div>
       <button type="button" className="sx-rtoggle" aria-expanded={receipt} onClick={() => setReceipt((v) => !v)}>
         {receipt ? "현금 흐름 기록 접기" : "현금 흐름 기록 펴기"}
       </button>

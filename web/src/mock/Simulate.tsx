@@ -112,7 +112,7 @@ function opsOf(sim: Sim, profile: Profile, store: Store, levers: Levers) {
   const earned = sim.rows.reduce((n, r) => n + r.profit, 0);
   const recent = sim.rows.slice(-30);
   const pace = recent.length >= 14 ? (recent.reduce((n, r) => n + r.profit, 0) / recent.length) * 30.4 : null;
-  const sunk = sunkCost(store, profile.gu);
+  const sunk = sunkCost(store, profile.gu, profile.keyMoney ?? 0);
   const left = pace && pace > 0 ? Math.ceil((sunk - earned) / pace) : null;
   return { be, avg, monthly, cur, firstBlack, earned, pace, sunk, left };
 }
