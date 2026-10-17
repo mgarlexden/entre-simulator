@@ -23,25 +23,29 @@ MOCK = ROOT / "web" / "public" / "mock"
 FAMILIES: dict[str, tuple[str, ...]] = {
     "weather": ("weather", "hourly_rain"),
     "holiday": ("holiday",),
-    "rent": ("rent_", "premium", "kosis_cost_임차료", "live_rent", "live_deposit"),
-    "competition": ("pork", "dong_", "live_shop"),
-    "sales": ("hansik", "cafe", "dong_"),
-    "neighborhood": ("dong_", "rent_dong_"),
+    "rent": ("rent_", "premium", "kosis_cost_임차료", "live_rent", "live_deposit", "cafe_rent"),
+    "competition": ("pork", "dong_", "live_shop", "cafe_competition"),
+    "sales": ("hansik", "cafe", "dong_", "cafe_sales"),
+    "neighborhood": ("dong_", "rent_dong_", "cafe_dong"),
     "price": ("price_", "kmta_pork", "kmta_import", "kmta_retail_pork", "kmta_market_pork", "pork_retail", "pork_import",
-              "pork_wholesale", "pork_margin", "pork_stock", "pig_auction"),
+              "pork_wholesale", "pork_margin", "pork_stock", "pig_auction", "cafe_menu_price"),
     "livestock": ("kape_", "pig_", "kmta_hanwoo", "kmta_pork_grading", "kmta_pork_consumption"),
-    "cost": ("kosis_",),
-    "myshop": ("live_",),
+    "cafe": ("cafe_", "coffee_", "dessert_", "beverage_"),
+    "cafe_cost": ("cafe_cost_", "cafe_startup", "cafe_investment"),
+    "cost": ("kosis_", "cafe_cost_"),
+    "myshop": ("live_", "cafe_myshop"),
 }
 TOPIC_RE: list[tuple[str, re.Pattern]] = [
     ("weather", re.compile(r"날씨|기온|장마|강수|소나기|비가|비 ?(오|와|온|올|내)|눈이|눈 ?(오|와|온)|더위|추위|한파|폭염")),
     ("holiday", re.compile(r"공휴일|휴일|연휴|명절|설날|추석|쉬는 ?날")),
     ("rent", re.compile(r"월세|임대|임차|보증금|권리금|평당")),
-    ("competition", re.compile(r"경쟁|몇 ?곳|몇 ?군데|가게 ?수|점포 ?수|고깃집 ?수|고깃집이 ?몇|몇 ?개|가장 많은 ?(구|동)|새로 ?생기")),
-    ("sales", re.compile(r"매출|객단가|폐업|생존|문 ?닫|결제|한식음식점|카페")),
+    ("competition", re.compile(r"경쟁|몇 ?곳|몇 ?군데|가게 ?수|점포 ?수|고깃집 ?수|고깃집이 ?몇|몇 ?개|가장 많은 ?(구|동)|새로 ?생기|카페 ?수|카페가 ?몇")),
+    ("sales", re.compile(r"매출|객단가|폐업|생존|문 ?닫|결제|한식음식점|카페|커피")),
     ("neighborhood", re.compile(r"동네|행정동|유형")),
-    ("price", re.compile(r"가격|시세|도매|소비자가|소매|경락|삼겹|목살|목심|항정|kg|지육|원육|고기 ?값|물가|올랐|내렸|오를|내릴")),
+    ("price", re.compile(r"가격|시세|도매|소비자가|소매|경락|삼겹|목살|목심|항정|kg|지육|원육|고기 ?값|물가|올랐|내렸|오를|내릴|상추|당근|배추|양배추|파|양파|감자|채소|쌀|유지|육류|축산물|돼지|소고기|닭고기|아메리카노|카페라떼|메뉴 ?가격|음료 ?가격")),
     ("livestock", re.compile(r"사육|마릿수|마리|두수|농장|농가|출하|도축|자돈|젖소|한우|육우|송아지")),
+    ("cafe", re.compile(r"카페|커피|디저트|베이커리|음료|아메리카노|라떼|에스프레소|아이스|핫|카푸치노")),
+    ("cafe_cost", re.compile(r"카페 ?창업|카페 ?오픈|카페 ?비용|카페 ?투자|카페 ?인테리어|카페 ?장비|에스프레소 ?머신|커피 ?머신|그라인더|쇼케이스|원두 ?가격|원두 ?구매|커피 ?원두|원두|식재료비|인건비|보증금|권리금")),
     ("cost", re.compile(r"식재료비|인건비|임차료|영업이익률|원가율|마진|비용 ?구조|비율|퍼센트|몇 ?%|몇 ?프로")),
     ("myshop", re.compile(r"이 ?(동네|구|지역)|내 ?(가게|점포|조건)|제 ?가게|우리 ?가게|입력한|내가|제가|본전|회수|되찾|흑자|적자|몇 ?달|개월|영업이익(?!률)|"
                           r"현금|잔고|여는 ?데|창업 ?비용|들어요|드는|투자|대출|직원|알바|테이블|평수|몇 ?평|좌석|몇 ?석|시뮬레이션|"
@@ -57,9 +61,16 @@ GU = re.compile(r"[가-힣]{1,3}구(?![가-힣])")
 PER_GU = re.compile(r"^(hansik_(?!seoul)|cafe_(?!seoul)|pork_(?!top|retail|import|wholesale|margin|stock))")
 EFFECT = re.compile(r"줄어|늘어|영향|효과|떨어|오르면|내리면|올리면|때문에|손님이 ?(줄|늘)")
 
-NONE_MESSAGE = ("이 질문에 맞는 근거 자료는 아직 없어요. 월세, 동네, 상가 점포 수, 매출·폐업률, 외식업 비용 구성, 날씨, 공휴일, "
-                "돼지고기 가격에 대한 질문이나 입력한 가게와 시뮬레이션 결과에 대한 질문을 해 주세요.")
-OFF_MESSAGE = "이 서비스는 가게를 열 때 필요한 숫자(동네, 월세, 비용, 가격, 시뮬레이션)만 다뤄요. 세금, 법률, 투자 같은 질문은 답하지 않아요."
+NONE_MESSAGE = ("죄송해요, 그 질문에는 확실한 근거 자료가 없어요. 📊\n"
+                "다음 주제들은 정확하게 답변할 수 있어요:\n"
+                "• 월세, 보증금, 권리금 (지역별)\n"
+                "• 카페 비용: 인테리어, 보증금, 창업자금, 원두, 식재료비\n"
+                "• 카페 경쟁도: 지역별 카페 수, 폐업률, 매출\n"
+                "• 동네 분석: 유동인구, 직장인구, 동네 유형\n"
+                "• 농축산물 가격: 돼지고기, 쌀, 채소 등\n"
+                "• 날씨, 공휴일\n"
+                "다른 질문이 있으신가요?")
+OFF_MESSAGE = "죄송해요, 그건 이 서비스 범위를 벗어나요. 🙅\n이 서비스는 가게를 열 때 필요한 숫자(동네 분석, 월세, 창업 비용, 재료비, 메뉴 가격, 시뮬레이션)만 다뤄요.\n세금, 법률, 투자 상품, 주식 같은 질문은 전문가 상담을 받아보세요."
 
 
 # ---------------------------------------------------------------- 근거 읽기
@@ -80,8 +91,78 @@ def _load(name: str) -> dict:
 
 
 def static_facts() -> tuple[list[dict], dict]:
-    a, b = _load("facts.json"), _load("facts_changeup.json")
-    return a["facts"] + b["facts"], {**a["sources"], **b["sources"]}
+    a = _load("facts.json")
+    b = _load("facts_changeup.json")
+    c = _load("cafe_gu.json")
+    d = _load("cafe_dong.json")
+    e = _load("cafe_cost.json")
+
+    facts = a["facts"] + b["facts"]
+    # 카페 JSON을 facts 형태로 변환
+    if c.get("facts"):
+        facts.extend([{
+            "id": f"cafe_gu_{k}",
+            "tags": ["카페", "구", "지표"],
+            "text": f"서울 {k}: {v}",
+            "sources": ["cafe_gu"]
+        } for k, v in c.items() if isinstance(v, dict)])
+    if d.get("facts"):
+        facts.extend(d["facts"])
+
+    # cafe_cost.json의 창업조건·비용을 facts로 변환
+    if e.get("start"):
+        for item in e["start"]:
+            cost_id = item.get("id", "")
+            name = item.get("name", "")
+            unit = item.get("unit", "")
+            low, base, high = item.get("low"), item.get("base"), item.get("high")
+            note = item.get("note", "")
+
+            # 기본값 범위를 명확한 텍스트로 작성
+            if low is not None or base is not None or high is not None:
+                if low == high and low is not None:
+                    text = f"{name}은 {low}{unit}이에요."
+                elif base is not None and low is not None and high is not None:
+                    text = f"{name}은 낮음 {low}{unit}, 기본 {base}{unit}, 높음 {high}{unit}이에요."
+                elif base is not None:
+                    text = f"{name}은 기본 {base}{unit}이에요."
+                else:
+                    text = f"{name}은 {low or ''}{unit}~{high or ''}{unit}이에요."
+
+                if note:
+                    text += f" ({note})"
+
+                # 주제 태그: 검색 가능하게 카테고리화
+                tags = ["카페", "비용"]
+                if "원두" in name or "커피" in name or "빈" in name:
+                    tags.extend(["원두", "커피", "재료비", "식재료"])
+                if "보증금" in name:
+                    tags.append("보증금")
+                if "권리금" in name:
+                    tags.append("권리금")
+                if "월세" in name or "임차료" in name:
+                    tags.append("월세")
+                if "인건비" in name:
+                    tags.append("인건비")
+                if "인테리어" in name:
+                    tags.append("인테리어")
+
+                facts.append({
+                    "id": f"cafe_cost_{cost_id}",
+                    "tags": tags,
+                    "text": text,
+                    "sources": ["cafe_cost"]
+                })
+
+    sources = {**a["sources"], **b["sources"]}
+    if c.get("sources"):
+        sources.update(c["sources"])
+    if d.get("sources"):
+        sources.update(d["sources"])
+    if e.get("sources"):
+        sources.update(e["sources"])
+
+    return facts, sources
 
 
 def dong_names() -> set[str]:
@@ -257,11 +338,16 @@ def run(q: str, ctx: dict | None = None, k: int = 3) -> dict:
     # 화면이 보낸 값은 지금 사용자가 보고 있는 가게의 값이라 같은 점수면 먼저 보여 준다
     ranked = sorted(((s * (1.25 if f["id"].startswith("live_") else 1.0), f) for s, f in ranked), key=lambda x: -x[0])
     top = ranked[0][0] if ranked else 0.0
-    if top < 0.15:
+    # 주제가 명확히 인식된 경우 임계값을 더 높게 (엉뚱한 답을 피하기 위해)
+    threshold = 0.25 if tps else 0.20
+    if top < threshold:
+        # 범위 밖 질문이면 명확하게 답변
+        if OFFTOPIC.search(q):
+            return {"answer": None, "facts": [], "citations": [], "message": OFF_MESSAGE}
         return {"answer": None, "facts": [], "citations": [], "message": NONE_MESSAGE}
     hits, seen = [], set()
     for sim, f in ranked:
-        if sim < max(0.15, 0.7 * top) or f["text"] in seen:
+        if sim < max(threshold, 0.7 * top) or f["text"] in seen:
             continue
         seen.add(f["text"])
         hits.append((sim, f))
