@@ -89,10 +89,11 @@
 .m-actions { display: grid; margin-block-start: 44px; }
 
 /* ---- 2. area ---- */
-.m-area { flex: 1; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(20px, 3vw, 48px); align-items: start; inline-size: min(100%, 1240px); margin-inline: auto; padding: clamp(20px, 4vh, 40px) 20px 64px; }
+.m-area { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: clamp(20px, 2.4vw, 40px); align-items: start; inline-size: min(100%, 2000px); margin-inline: auto; padding: clamp(14px, 2.5vh, 28px) clamp(16px, 2.4vw, 44px) 40px; }
+.m-mapcol { position: sticky; inset-block-start: 12px; }
 .m-mapcol { display: grid; gap: 12px; justify-items: start; padding: 20px; border: 1px solid #edf0f4; border-radius: 24px; box-shadow: var(--card); }
 .m-map2d { position: relative; inline-size: 100%; }
-.m-map2d svg { display: block; inline-size: 100%; block-size: auto; max-block-size: 62vh; }
+.m-map2d svg { display: block; inline-size: 100%; block-size: auto; max-block-size: calc(100dvh - 250px); }
 .m-map2d path { stroke-width: 0.06; stroke-linejoin: round; cursor: pointer; outline: none; transition: opacity 140ms ease-out; }
 .m-map2d svg.has-focus path:not(.is-focus):not(.is-on) { opacity: 0.45; }
 .m-map2d path.is-on, .m-map2d path.is-focus { filter: drop-shadow(0 0.22px 0.4px rgba(25, 31, 40, 0.55)); }
@@ -109,8 +110,8 @@
 .m-tabs { display: flex; gap: 6px; }
 .m-tabs button { padding: 8px 16px; border: 0; border-radius: 12px; background: var(--soft); color: var(--ink2); }
 .m-tabs button[aria-selected="true"] { background: var(--blue); color: #fff; font-weight: 600; }
-.m-finding { display: grid; gap: 22px; margin-block-start: 28px; animation: m-in 240ms ease-out both; }
-.m-finding h1 { font: 700 clamp(26px, 2.7vw, 36px)/1.35 var(--display); letter-spacing: -0.02em; max-inline-size: 18em; }
+.m-finding { display: grid; gap: 14px; margin-block-start: 14px; animation: m-in 240ms ease-out both; }
+.m-finding h1 { font: 700 clamp(24px, 2vw, 32px)/1.35 var(--display); letter-spacing: -0.02em; max-inline-size: 26em; }
 .m-finding > p { max-inline-size: 36em; color: var(--ink2); }
 .m-rows > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; align-items: center; padding: 13px 0; border-block-end: 1px solid var(--rule); }
 .m-rows dt { font-weight: 500; }
@@ -414,3 +415,56 @@ html:has(.m-app) { background: #fff; }
 .m-dong select { width: 100%; padding: 10px 12px; border: 1px solid var(--line, #c3d0e2); border-radius: 10px; font-size: 16px; background: #fff; color: var(--ink); }
 
 @media (hover: hover) { .m-btn-outline:not(:disabled):hover { background: var(--blue-wash); color: var(--blue-deep); } }
+
+/* 동네 지도, 동네 한눈에, 제안, 정책자금 */
+.m-maphead { display: flex; align-items: center; justify-content: space-between; gap: 12px; inline-size: 100%; }
+.m-sub { margin-block-start: 6px; font-size: 18px; font-weight: 700; color: var(--ink); }
+.m-style { display: grid; gap: 10px; padding: 18px 20px; border-radius: 18px; background: var(--blue-wash); }
+.m-style.is-empty { background: var(--soft); }
+.m-style-name { font: 700 24px/1.3 var(--display); letter-spacing: -0.02em; color: var(--blue-deep); }
+.m-style-why { color: var(--ink2); font-size: 16px; }
+.m-chips, .m-kw { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.m-chip { padding: 3px 10px; border-radius: 999px; font-size: 14px; font-weight: 600; background: #fff; color: var(--ink2); }
+.m-chip.is-good { background: #e3f6ec; color: #11633b; }
+.m-chip.is-warn { background: #fde8e6; color: #a1281f; }
+.m-kw li { padding: 2px 10px; border-radius: 8px; background: #fff; color: var(--blue-deep); font-size: 15px; font-weight: 600; }
+.m-kw li::before { content: "#"; margin-inline-end: 1px; opacity: 0.6; }
+.m-acts { display: grid; gap: 10px; margin: 0; padding-inline-start: 22px; }
+.m-acts li { font-size: 16px; line-height: 1.55; }
+.m-acts small { margin-block-start: 2px; }
+.m-picks { display: grid; gap: 14px; }
+.m-picks ul { display: grid; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
+.m-picks li { display: grid; gap: 0; }
+.m-moneyref { max-inline-size: 38em; margin-block-start: 6px; font-size: 15px; color: var(--pencil); }
+.m-funds { display: grid; gap: 14px; }
+.m-funds ul { display: grid; gap: 14px; margin: 6px 0 0; padding: 0; list-style: none; }
+.m-funds li { padding-block-end: 12px; border-block-end: 1px solid var(--rule); }
+.m-funds li p { margin-block-start: 2px; font-size: 16px; }
+
+.m-recbtn { inline-size: 100%; padding: 10px 16px; font-size: 16px; }
+
+/* 동네 분석: 가로를 넓게 쓰고 스크롤을 줄인다 */
+.m-panel { min-inline-size: 0; }
+.m-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(225px, 1fr)); gap: 4px 24px; align-items: start; }
+.m-cols .m-sub { margin-block: 0 2px; font-size: 16px; }
+.m-cols .m-rows > div { padding: 8px 0; }
+.m-cols .m-rows dd { font-size: 17px; }
+.m-cols .m-rows dt { font-size: 15px; line-height: 1.4; }
+.m-cols .m-rentin { margin-block-start: 10px; }
+.m-style { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); column-gap: 28px; align-items: start; }
+.m-style > .m-acts { grid-column: 2; grid-row: 1 / span 4; }
+.m-style > small { grid-column: 1 / -1; }
+.m-style.is-empty { grid-template-columns: 1fr; }
+.m-style.is-empty .m-picks { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+.m-picks ul { display: grid; gap: 8px; }
+.m-dong { margin-block: 0; }
+.m-srcnote summary { cursor: pointer; color: var(--pencil); font-size: 14px; }
+.m-finding > .m-aside { margin: 0; }
+@media (max-width: 1100px) {
+  .m-mapcol { position: static; }
+  .m-style { grid-template-columns: 1fr; }
+  .m-style > .m-acts { grid-column: 1; grid-row: auto; }
+}
+.m-dong { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
+.m-dong > small { grid-column: 1 / -1; }
+.m-dong label small { display: inline; margin-inline-start: 6px; }

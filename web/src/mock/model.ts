@@ -4,9 +4,17 @@
 // shock sizes from research/shocks.yaml. Every input and its standing is listed on the #/sources page (sources.ts).
 
 export type Industry = "bbq" | "cafe";
+// 화면 문구와 계산에서 업종마다 달라지는 말. 동네 분석은 setIndustry로 업종을 바꾸면 같은 코드가 카페용 자료로 돈다.
+export const TXT = {
+  bbq: { shop: "고깃집", base: "한식음식점", kind: "돼지고기 구이 가게", cat: "한식 가게" },
+  cafe: { shop: "카페", base: "커피·음료 가게", kind: "카페", cat: "커피·음료 가게" },
+} as const;
+let IND: Industry = "bbq";
+export const industry = (): Industry => IND;
+export const T = () => TXT[IND];
 // rent: 사용자가 직접 넣은 현금 월세(만원/평·월, 보증금 제외). 넣은 구에서만 쓴다. 선택 사항.
 // dong: 고른 동네(행정동). 그 구에서만 쓴다. 없으면 구 전체 평균.
-export type Profile = { industry: Industry; gu: string; reasons: string[]; capital: number; age: string; rent?: { gu: string; v: number }; dong?: { gu: string; name: string } }; // capital in 만원
+export type Profile = { industry: Industry; gu: string; reasons: string[]; capital: number; age: string; rent?: { gu: string; v: number }; dong?: { gu: string; name: string }; keyMoney?: number }; // capital, keyMoney in 만원
 export type Gu = { code: string; name: string; rings: [number, number][][]; c: [number, number]; r: number }; // c: label point, r: room around it
 // demand: 점포당 월매출 ÷ 서울 평균. stores: 상권 안 한식음식점 수. closure: 1년 폐업률(%). sales: 점포당 월매출(만원).
 // tx: 점포당 하루 결제 건수. ticket: 결제 1건 금액(원). rent: 현금 월세 만원/평·월 (rentSrc가 값의 출처). pork: 구 전체의 돼지고기 구이 가게 수.
@@ -17,12 +25,15 @@ export type GuStat = {
   demand: number; stores: number; closure: number; sales: number; tx: number; ticket: number; rent: number; rentLow: number; rentHigh: number;
   rentAll: number | null; rentAreas: number; rentArea: string | null; rentSrc: RentSrc; pork: number; opening: number; dow: number[]; qidx: number[];
   area: string | null; areaType: string | null; areaPork: number | null; areaStores: number | null;
+  salesRange: [number, number] | null; // 카페만: 점포당 월매출의 4분의 1·4분의 3 분위 (만원). 고깃집은 null
+  growth: number | null; netOpen: number | null; salesHansik: number; // 점포당 월매출 전년 대비 %, 개업률-폐업률 %p, 한식음식점 기준 월매출(만원)
 };
 export type Dong = {
   code: string; name: string; stores: number; pork: number; sales_month: number; raw_per_store: number | null; rel: number | null;
   dow: number[]; qidx: number[]; shares: { weekend: number; lunch: number; evening: number; age20: number; age30: number }; type: string;
 };
-export type DongData = { _meta: { generated: string; year: number; caveats: string[] }; gu: Record<string, Dong[]> };
+// 카페용(cafe_dong_stats.json)은 _meta에 보정 배율(adj)과 구별 카페 수(gu_cafes)가 더 들어 있다.
+export type DongData = { _meta: { generated: string; year: number; caveats: string[]; adj?: number; gu_cafes?: Record<string, number> }; gu: Record<string, Dong[]> };
 let DONGS: DongData | null = null;
 export const setDongData = (d: DongData | null) => { DONGS = d; };
 export const dongsOf = (gu: string): Dong[] => DONGS?.gu[gu] ?? [];
@@ -35,6 +46,26 @@ export type GuData = {
   bbq: Block; cafe: Block;
   pork?: { snapshot: string; source: string; codes: Record<string, string>; gu: Record<string, { hansik: number; pork: number; beef: number; tripe: number }> };
 };
+// 외식업체 경영실태조사(2025) 한식 육류 요리 전문점 값. pipelines/build_gogi_krei.py가 만든 gogi_krei.json.
+export type KreiRow = { n: number; values: Record<string, number> };
+export type KreiTable = { table: number; title: string; meat?: KreiRow; hansik?: KreiRow; hansik_all?: KreiRow; all?: KreiRow };
+export type Quant = { n: number; p25: number; p50: number; p75: number } | null;
+export type KreiData = { _meta: { caveat: string[]; files: string[] }; tables: Record<string, KreiTable>; micro: Record<string, any> };
+let KREI: KreiData | null = null;
+export const setKrei = (d: KreiData | null) => { KREI = d; };
+export const krei = () => KREI;
+export const kreiMean = (k: string, who: "meat" | "hansik_all" = "meat") => KREI?.tables[k]?.[who]?.values["평균"] ?? null;
+// 한식 육류 요리 전문점의 점포당 연매출 ÷ 한식 전체 점포당 연매출. 서울시 상권분석서비스의 한식음식점 값을 육류 전문점 수준으로 옮기는 배율.
+export const meatUplift = (): number => { const a = kreiMean("pl_sales"), b = kreiMean("pl_sales", "hansik_all"); return a && b ? a / b : 1; };
+
+// 성장률. pipelines/build_growth.py가 만든 growth.json: 2025년과 2024년의 한식음식점을 같은 상권끼리 비교한 값.
+export type GrowthRow = { sales_growth: number; store_growth: number; closure_prev: number; closure_now: number; opening_prev: number; opening_now: number; net_open: number };
+export type GrowthData = { _meta: { prev: number; year: number }; seoul: GrowthRow; gu: Record<string, GrowthRow> };
+let GROWTH: GrowthData | null = null;
+export const setGrowth = (d: GrowthData | null) => { GROWTH = d; };
+export const growthOf = (gu: string): GrowthRow | null => GROWTH?.gu[gu] ?? null;
+export const growthMeta = () => GROWTH?._meta ?? null;
+
 let DATA: GuData | null = null;
 export const setGuData = (d: GuData) => { DATA = d; };
 export const guData = () => DATA;
@@ -65,8 +96,11 @@ function hash(s: string): number {
   return (h >>> 0) / 4294967296;
 }
 
+// 카페 매출 대표값. 전국 독립 커피전문점 연매출 중앙값 10,740만원(25%·75% = 8,000·16,000, n=153)을 농식품부·KREI 2024 비프랜차이즈
+// 음료점 평균 연 13,759만원으로 나눈 값이 0.78 (카페 팀 v6 시작 비용 시트). 서울 값이 아니라 전국 배율을 서울 평균에 옮긴 추정(등급 L).
+export const CAFE_MEDIAN = { ratio: 10740 / 13759, p25: 8000 / 10740, p75: 16000 / 10740 };
 export function guStat(name: string): GuStat {
-  const g = DATA?.bbq.gu[name];
+  const g = DATA?.[IND].gu[name];
   let rent = Math.round(9 + hash(name + "r") * 20); // 월세 자료가 없을 때만 쓰는 예시값
   let rentLow = rent * 0.75, rentHigh = rent * 1.25, rentAll: number | null = null, rentAreas = 0;
   let rentSrc: RentSrc = "예시값";
@@ -94,28 +128,51 @@ export function guStat(name: string): GuStat {
   }
   const rentPart = { rent, rentLow: round1(rentLow), rentHigh: round1(rentHigh), rentAll, rentAreas, rentArea, rentSrc };
   const area = { area: dg?.name ?? null, areaType: dg?.type ?? null, areaPork: dg?.pork ?? null, areaStores: dg?.stores ?? null };
-  if (!g) return { demand: 1, stores: 0, closure: 0, sales: 0, tx: 0, ticket: 0, ...rentPart, ...area, pork: 0, opening: 0, dow: Array(7).fill(1 / 7), qidx: [1, 1, 1, 1] };
-  const sales = dg?.rel ? Math.round(g.sales_per_store_month * Math.min(2, Math.max(0.4, dg.rel))) : g.sales_per_store_month;
+  const gr = IND === "bbq" ? GROWTH?.gu[name] ?? null : null;
+  // 카페는 2024년 구 매출이 없어 growth 자리에 '가게 수 흐름'(개업률−폐업률, %p)을 넣는다. 화면은 업종을 보고 문구를 바꾼다.
+  const flow = IND === "cafe" && g ? round1((g.opening_rate - g.closure_rate) * 100) : null;
+  const grow = { growth: gr?.sales_growth ?? flow, netOpen: gr?.net_open ?? flow };
+  if (!g) return { demand: 1, stores: 0, closure: 0, sales: 0, salesRange: null, salesHansik: 0, tx: 0, ticket: 0, ...rentPart, ...area, ...grow, pork: 0, opening: 0, dow: Array(7).fill(1 / 7), qidx: [1, 1, 1, 1] };
+  const salesH = dg?.rel ? Math.round(g.sales_per_store_month * Math.min(2, Math.max(0.4, dg.rel))) : g.sales_per_store_month;
+  // 고깃집: 한식 값 × 육류 전문점 배율. 카페: 카드 추정매출 × 서울 소상공인 카페 월매출로 맞춘 보정 배율(v6, 1.538).
+  // 카페는 평균이 아니라 중앙값을 대표값으로 쓴다(잘되는 가게 몇 곳이 평균을 끌어올리므로). 서울 소상공인 카페 월매출 평균(보정 후)에
+  // 전국 독립 음료점의 '중앙값 ÷ 평균' 배율을 곱한 추정이다. 서울 중앙값은 공개 자료에 없다(CAFE_MEDIAN).
+  const sales = Math.round(salesH * (IND === "cafe" ? (DONGS?._meta.adj ?? 1.538) * CAFE_MEDIAN.ratio : meatUplift()));
+  const salesRange: [number, number] | null = IND === "cafe" ? [Math.round(sales * CAFE_MEDIAN.p25), Math.round(sales * CAFE_MEDIAN.p75)] : null;
   return {
-    demand: +(g.demand_index * (sales / g.sales_per_store_month)).toFixed(2), stores: g.stores, closure: +(g.closure_rate * 100).toFixed(1),
-    sales, tx: g.tx_per_store_day,
-    ticket: g.ticket, ...rentPart, ...area, pork: DATA?.pork?.gu[name]?.pork ?? 0, opening: g.opening_rate,
+    demand: +(g.demand_index * (salesH / g.sales_per_store_month)).toFixed(2), stores: g.stores, closure: +(g.closure_rate * 100).toFixed(1),
+    sales, salesRange, salesHansik: salesH, ...grow, tx: g.tx_per_store_day,
+    ticket: g.ticket, ...rentPart, ...area, pork: IND === "cafe" ? DONGS?._meta.gu_cafes?.[name] ?? g.stores : DATA?.pork?.gu[name]?.pork ?? 0, opening: g.opening_rate,
     dow: dg?.dow ?? g.dow_share, qidx: dg?.qidx ?? g.quarter_index,
   };
 }
 
 export const RAMP = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]; // one hue, light to dark
 
-export type Metric = "demand" | "pork" | "closure";
-export const METRICS: Record<Metric, { label: string; fmt: (v: number) => string; hint: string }> = {
-  demand: { label: "매출 지수", fmt: (v) => v.toFixed(2), hint: "한식음식점 한 곳의 월매출, 서울 평균이 1" },
-  pork: { label: "고깃집 수", fmt: (v) => `${v.toLocaleString("ko-KR")}곳`, hint: "돼지고기 구이 가게, 구 전체" },
-  closure: { label: "1년 폐업률", fmt: (v) => `${v}%`, hint: "2025년에 문 닫은 한식음식점 비율" },
+export type Metric = "demand" | "growth" | "pork" | "closure";
+type MetricInfo = { label: string; fmt: (v: number) => string; hint: string };
+const gone = (v: number) => `${v.toLocaleString("ko-KR")}곳`;
+const METRICS_BY: Record<Industry, Record<Metric, MetricInfo>> = {
+  bbq: {
+    demand: { label: "매출 지수", fmt: (v) => v.toFixed(2), hint: "한식음식점 한 곳의 월매출, 서울 평균이 1" },
+    growth: { label: "매출 성장률", fmt: (v) => `${v > 0 ? "+" : ""}${v}%`, hint: "한식음식점 한 곳의 월매출이 2024년보다 늘어난 비율 (물가 상승 포함)" },
+    pork: { label: "고깃집 수", fmt: gone, hint: "돼지고기 구이 가게, 구 전체" },
+    closure: { label: "1년 폐업률", fmt: (v) => `${v}%`, hint: "2025년에 문 닫은 한식음식점 비율" },
+  },
+  cafe: {
+    demand: { label: "매출 지수", fmt: (v) => v.toFixed(2), hint: "커피·음료 가게 한 곳의 월매출(카드 추정), 서울 평균이 1" },
+    growth: { label: "가게 수 흐름", fmt: (v) => `${v > 0 ? "+" : ""}${v}%p`, hint: "연 개업률 − 연 폐업률. 카페는 2024년 구 매출 자료가 없어 매출 성장률 대신 써요" },
+    pork: { label: "카페 수", fmt: gone, hint: "소상공인 상가정보의 카페, 구 전체 (프랜차이즈 포함)" },
+    closure: { label: "1년 폐업률", fmt: (v) => `${v}%`, hint: "최근 4분기에 문 닫은 커피·음료 가게 비율" },
+  },
 };
+export const METRICS: Record<Metric, MetricInfo> = { ...METRICS_BY.bbq };
+// 업종을 바꾼다. 화면이 읽기 전에 부른다(Mock.tsx).
+export function setIndustry(i: Industry) { IND = i; Object.assign(METRICS, METRICS_BY[i]); }
 
 export function rankOf(name: string, metric: Metric, names: string[]): number {
-  const v = guStat(name)[metric];
-  return names.filter((n) => guStat(n)[metric] > v).length + 1;
+  const v = guStat(name)[metric] ?? -Infinity;
+  return names.filter((n) => (guStat(n)[metric] ?? -Infinity) > v).length + 1;
 }
 
 // 을/를 by the last syllable's 받침 (non-Hangul endings take 를)
@@ -143,10 +200,13 @@ export function man(v: number): string {
 
 // ---- store plan (the builder's output) ---------------------------------------------------------------
 export type Grade = "basic" | "mid" | "high";
+// 평당 인테리어 공사비(만원). 외식업체 경영실태조사 2025 원자료, 한식 육류 요리 전문점 중 12~40평 가게의 가중 분위수:
+// 25% 42 / 50% 77 / 75% 153 (응답 85곳, gogi_krei.json micro.mid_size_12_40). 기본·중급·고급을 이 세 분위수에 맞춰 45·80·150으로 둔다.
+// 예전 가정값은 150·220·320이었고, 실측 상위 25%가 150이라 고급 320은 조사 범위를 벗어난다.
 export const GRADES: Record<Grade, { label: string; perPyeong: number; floor: string; wall: string }> = {
-  basic: { label: "기본", perPyeong: 150, floor: "#cbb9a0", wall: "#efe6d6" },
-  mid: { label: "중급", perPyeong: 220, floor: "#9a8672", wall: "#e4ddd0" },
-  high: { label: "고급", perPyeong: 320, floor: "#5b4a3f", wall: "#d8cdbb" },
+  basic: { label: "기본", perPyeong: 45, floor: "#cbb9a0", wall: "#efe6d6" },
+  mid: { label: "중급", perPyeong: 80, floor: "#9a8672", wall: "#e4ddd0" },
+  high: { label: "고급", perPyeong: 150, floor: "#5b4a3f", wall: "#d8cdbb" },
 };
 
 export type CatalogItem = {
@@ -154,9 +214,11 @@ export type CatalogItem = {
   w: number; d: number; h: number; seats?: number; max?: number; note?: string; fixed?: boolean; // fixed: part of the shell, not in the catalog
 };
 export const CATALOG: CatalogItem[] = [
-  { id: "table4", name: "4인 테이블", cat: "seat", price: 85, w: 1.5, d: 2, h: 0.74, seats: 4, note: "불판, 환기 포함" },
-  { id: "table2", name: "2인 테이블", cat: "seat", price: 60, w: 1.5, d: 1, h: 0.74, seats: 2, note: "불판, 환기 포함" },
-  { id: "kitchen", name: "주방", cat: "equip", price: 900, w: 4, d: 2.5, h: 2.6, max: 1, fixed: true, note: "벽으로 나눈 방" },
+  // 테이블: 경영실태조사 육류 전문점 홀 관련 비용 중앙값 1,388만원 ÷ 테이블 수 중앙값 12개 = 116만원, 건희 레포 등급 점검값 113·57과 맞춰 둠
+  { id: "table4", name: "4인 테이블", cat: "seat", price: 113, w: 1.5, d: 2, h: 0.74, seats: 4, note: "불판, 환기 포함" },
+  { id: "table2", name: "2인 테이블", cat: "seat", price: 57, w: 1.5, d: 1, h: 0.74, seats: 2, note: "불판, 환기 포함" },
+  // 주방: 육류 전문점 '주방 관련 비용' 중앙값 1,500만원 (응답 111곳). 예전 가정값 900
+  { id: "kitchen", name: "주방", cat: "equip", price: 1500, w: 4, d: 2.5, h: 2.6, max: 1, fixed: true, note: "벽으로 나눈 방" },
   { id: "counter", name: "계산대와 POS", cat: "equip", price: 150, w: 1.5, d: 1, h: 1.05, max: 1 },
   { id: "kiosk", name: "키오스크", cat: "equip", price: 120, w: 0.5, d: 0.5, h: 1.5 },
   { id: "fridge", name: "주류 냉장고", cat: "equip", price: 180, w: 1, d: 1, h: 1.9 },
@@ -221,6 +283,11 @@ export function tableSlots(pyeong: number): { x: number; z: number }[] {
   return out;
 }
 
+// 처음 화면: 벽으로 나뉜 주방만 있고 테이블, 냉장고, 계산대는 없다. 사용자가 직접 놓거나 '추천 배치'를 누른다.
+export function emptyStore(pyeong = 20, grade: Grade = "basic"): Store {
+  return { pyeong, grade, items: [{ uid: 1, id: "kitchen", ...kitchenSpot(pyeong), rot: 0 }], loan: 0 };
+}
+
 // the kitchen room, one drinks fridge and `tables` four-seat tables, laid out automatically
 export function starterStore(pyeong = 20, grade: Grade = "basic", loan = 0, tables = 3): Store {
   const store: Store = { pyeong, grade, items: [], loan };
@@ -248,14 +315,15 @@ export function storeStats(store: Store) {
 // ---- opening cost -------------------------------------------------------------------------------------
 export const SIGN = 250, FIRST_STOCK = 300; // 가정
 export const LOAN_RATE = 0.06; // 연 이자율, 가정. 이자만 매달 냄
-export const cashLeft = (profile: Profile, store: Store) => profile.capital + store.loan - openingCost(store, profile.gu).total;
+export const cashLeft = (profile: Profile, store: Store) => profile.capital + store.loan - openingCost(store, profile.gu, profile.keyMoney ?? 0).total;
 export type CostLine = { key: string; label: string; amount: number; basis: string };
-export function openingCost(store: Store, gu: string): { lines: CostLine[]; total: number } {
+export function openingCost(store: Store, gu: string, keyMoney = 0): { lines: CostLine[]; total: number } {
   const st = guStat(gu);
   const s = storeStats(store);
   const seatCost = store.items.filter((i) => ITEM[i.id].cat === "seat").reduce((n, i) => n + ITEM[i.id].price, 0);
   const equip = store.items.filter((i) => ITEM[i.id].cat === "equip").reduce((n, i) => n + ITEM[i.id].price, 0);
   const lines: CostLine[] = [
+    ...(keyMoney > 0 ? [{ key: "keymoney", label: "권리금", amount: keyMoney, basis: "직접 넣은 값 (가게 자리에 붙는 웃돈, 나갈 때 돌려받지 못해요)" }] : []),
     { key: "deposit", label: "보증금", amount: st.rent * store.pyeong * DEPOSIT_MONTHS, basis: `월세 ${DEPOSIT_MONTHS}개월분 (서울시 실태조사: 보증금은 월세의 11~15개월)` },
     { key: "interior", label: "인테리어 공사", amount: GRADES[store.grade].perPyeong * store.pyeong, basis: `${store.pyeong}평, 평당 ${GRADES[store.grade].perPyeong}만원 (${GRADES[store.grade].label})` },
     { key: "equip", label: "주방과 설비", amount: equip, basis: "주방, 냉장고, 계산대 등" },
@@ -298,7 +366,7 @@ export type Run = { rows: MonthRow[]; start: number; opening: number; capMonthly
 export function simulate(profile: Profile, store: Store, lv: Levers, shocks: ShockId[], demandMult = 1): Run {
   const st = guStat(profile.gu);
   const s = storeStats(store);
-  const opening = openingCost(store, profile.gu).total;
+  const opening = openingCost(store, profile.gu, profile.keyMoney ?? 0).total;
   const start = profile.capital + store.loan - opening;
   const staff = Math.max(0, lv.staff - (shocks.includes("quit") ? 1 : 0));
   const capacity = s.hasKitchen ? Math.min(s.seats * SEAT_TURN, (staff + 1) * COVERS_PER_STAFF) : 0;
@@ -339,7 +407,7 @@ export function breakEven(profile: Profile, store: Store, lv: Levers) {
   return { lines, fixed, margin, perDay: (fixed * 10000) / (margin * lv.days) };
 }
 // money that does not come back: everything spent to open except the deposit
-export const sunkCost = (store: Store, gu: string) => openingCost(store, gu).lines.filter((l) => l.key !== "deposit").reduce((n, l) => n + l.amount, 0);
+export const sunkCost = (store: Store, gu: string, keyMoney = 0) => openingCost(store, gu, keyMoney).lines.filter((l) => l.key !== "deposit").reduce((n, l) => n + l.amount, 0);
 // settled month: what is left after every cost, the owner's pay and loan interest
 export const settledNet = (run: Run, store: Store) => run.rows[5].op - OWNER_DRAW - (store.loan * LOAN_RATE) / 12;
 
@@ -388,7 +456,7 @@ export function checks(profile: Profile, store: Store, lv: Levers): Check[] {
   const bySeat = s.seats * SEAT_TURN, byStaff = (lv.staff + 1) * COVERS_PER_STAFF;
   const cap = Math.round(last.capacity);
   const net = settledNet(mid, store);
-  const sunk = sunkCost(store, profile.gu);
+  const sunk = sunkCost(store, profile.gu, profile.keyMoney ?? 0);
   const neg = firstNegative(low);
   const base = last.cash;
   const shockRows = (Object.keys(SHOCKS) as ShockId[]).map((k) => {
@@ -441,11 +509,14 @@ export function checks(profile: Profile, store: Store, lv: Levers): Check[] {
       rule: `들인 돈은 보증금을 뺀 공사, 설비, 간판, 첫 재료 값이에요(보증금은 나갈 때 돌려받아요). 한 달에 남는 돈은 6개월째 매출에서 재료비, 급여, 월세, 관리비, 사장 생활비 ${man(OWNER_DRAW)}, 이자를 뺀 값이에요.`,
     },
     {
-      key: "shock", title: "나쁜 일이 생기면 어떻게 되나요?",
+      key: "shock", title: "오픈 이후 어떤 사건들이 생길까요?",
       status: bad === 0 ? "ok" : bad <= 2 ? "warn" : "weak",
-      line: bad === 0 ? "아래 네 가지 가운데 무엇이 하나 생겨도 6개월 뒤 현금이 남아요." : `아래 네 가지 가운데 ${bad}가지는 하나만 생겨도 6개월 안에 현금이 바닥나요.`,
+      line: bad === 0 ? "아래 네 가지 사건 가운데 무엇이 하나 생겨도 6개월 뒤 현금이 남아요." : `아래 네 가지 사건 가운데 ${bad}가지는 하나만 생겨도 6개월 안에 현금이 바닥나요.`,
       rows: shockRows,
       rule: "한 가지씩 따로 6개월 내내 이어진다고 보고 계산했어요. 괄호 안은 아무 일 없을 때와의 차이예요. 크기는 기존 시뮬레이터의 가정값이에요.",
     },
   ];
 }
+
+// 자료를 모듈 변수에 들고 있어서, 이 파일이 핫리로드로 새로 불리면 자료가 비는데 화면은 로딩 완료로 남는다. 통째로 다시 불러 맞춘다.
+if (import.meta.hot) import.meta.hot.accept(() => location.reload());

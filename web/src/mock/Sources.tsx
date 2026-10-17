@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { CATALOG, GRADES, man, type GuData } from "./model";
 import SourcesCafe from "./SourcesCafe";
 import SourcesGogi from "./SourcesGogi";
+import SourcesChanges from "./SourcesChanges";
+import SourcesTodo from "./SourcesTodo";
 import "./sources.css";
 
 type Kind = "실측" | "차용" | "가정" | "예시값";
@@ -216,8 +218,9 @@ const VERDICT_CLASS: Record<string, string> = { 채움: "실측", "부분 채움
 export default function Sources() {
   const [d, setD] = useState<GuData | null>(null);
   const [audit, setAudit] = useState<Audit | null>(null);
-  const [tab, setTab] = useState<"gogi" | "cafe">(() => (location.hash.includes("cafe") ? "cafe" : "gogi"));
-  const pick = (k: "gogi" | "cafe") => { setTab(k); window.scrollTo({ top: 0 }); };
+  type TabKey = "gogi" | "cafe" | "log" | "todo";
+  const [tab, setTab] = useState<TabKey>(() => (location.hash.includes("cafe") ? "cafe" : location.hash.includes("log") ? "log" : location.hash.includes("todo") ? "todo" : "gogi"));
+  const pick = (k: TabKey) => { setTab(k); window.scrollTo({ top: 0 }); };
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}mock/gu_stats.json`).then((r) => r.json()).then(setD).catch(() => setD(null)); }, []);
   useEffect(() => { fetch(`${import.meta.env.BASE_URL}mock/team_audit.json`).then((r) => r.json()).then(setAudit).catch(() => setAudit(null)); }, []);
   const groups = rows(d);
@@ -231,16 +234,16 @@ export default function Sources() {
       <h1>출처와 근거 (운영자용)</h1>
       <p>화면에 나오는 숫자가 어디서 왔고 얼마나 믿을 수 있는지 적은 장부입니다. 업종별로 나눴습니다. 계산식은 <code>web/src/mock/model.ts</code>와
         시뮬 엔진 <code>sim/</code>에 있습니다.</p>
-      <div className="src-tabs" role="tablist" aria-label="업종">
-        {(["gogi", "cafe"] as const).map((k) => (
+      <div className="src-tabs" role="tablist" aria-label="업종과 변경 기록">
+        {(["gogi", "cafe", "log", "todo"] as const).map((k) => (
           <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => pick(k)}>
-            {k === "gogi" ? "고깃집" : "카페"}
+            {k === "gogi" ? "고깃집" : k === "cafe" ? "카페" : k === "log" ? "10/16 수정사항" : "남은 작업"}
           </button>
         ))}
       </div>
-      <p className="src-sub">{tab === "gogi" ? "이 서비스의 화면이 실제로 쓰는 값입니다. 데이터 출처, 탭별 출처, 시뮬레이션 변수, 충분성 검토 순서입니다." : "카페는 아직 화면이 없습니다. 건희 레포의 카페 브랜치가 쓴 데이터, 그 갭, 팀원이 채운 것과 남은 것을 모았습니다."}</p>
+      <p className="src-sub">{tab === "todo" ? "아직 하지 않은 일입니다. 담당과 함께 적었습니다." : tab === "log" ? "2026-10-16 하루 동안 바뀐 것입니다. 어떤 값과 화면이 바뀌었는지, 데이터 갭을 어떤 출처로 채웠는지, 아직 못 채운 것을 적었습니다." : tab === "gogi" ? "이 서비스의 화면이 실제로 쓰는 값입니다. 데이터 출처, 탭별 출처, 시뮬레이션 변수, 충분성 검토 순서입니다." : "카페는 아직 화면이 없습니다. 건희 레포의 카페 브랜치가 쓴 데이터, 그 갭, 팀원이 채운 것과 남은 것을 모았습니다."}</p>
 
-      {tab === "cafe" ? <SourcesCafe /> : (
+      {tab === "todo" ? <SourcesTodo /> : tab === "log" ? <SourcesChanges /> : tab === "cafe" ? <SourcesCafe /> : (
         <>
           <SourcesGogi />
           <h2 id="g-appendix">부록: 기존 장부</h2>

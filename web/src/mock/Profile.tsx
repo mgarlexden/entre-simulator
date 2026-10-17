@@ -1,6 +1,6 @@
 // Step 1. One question on screen at a time; the previous one fades out before the next fades in.
 import { useEffect, useRef, useState } from "react";
-import { man, type Gu, type Profile } from "./model";
+import { krei, man, type Gu, type Profile } from "./model";
 
 const REASONS = ["사는 곳과 가까워서", "유동 인구가 많아서", "월세가 쌀 것 같아서", "잘 아는 동네라서", "아직 잘 모르겠어요"];
 const AGES = ["20대", "30대", "40대", "50대 이상"];
@@ -25,6 +25,7 @@ export default function ProfileStep({ profile, setProfile, gus, onDone }: {
     timer.current = window.setTimeout(() => { setI(Math.max(0, to)); setLeaving(false); }, 200);
   };
   const valid = q !== "capital" || profile.capital >= 500;
+  const invest = krei()?.micro.invest_total as { n: number; p25: number; p50: number; p75: number } | undefined;
 
   const answered: { label: string; at: number }[] = [
     { label: profile.industry === "bbq" ? "고깃집" : "카페", at: 0 },
@@ -55,8 +56,8 @@ export default function ProfileStep({ profile, setProfile, gus, onDone }: {
           <fieldset>
             <legend>어떤 가게를 열고 싶으세요?</legend>
             <div className="m-choices m-choices-big">
-              <label className="m-choice"><input type="radio" name="ind" checked={profile.industry === "bbq"} onChange={() => set({ industry: "bbq" })} /><span>고깃집<small>삼겹살, 목살 같은 돼지고기 구이</small></span></label>
-              <label className="m-choice is-off"><input type="radio" name="ind" disabled /><span>카페<small>자료를 모으는 중이에요. 곧 열려요.</small></span></label>
+              <label className="m-choice"><input type="radio" name="ind" checked={profile.industry === "bbq"} onChange={() => set({ industry: "bbq" })} /><span>고깃집<small>삼겹살, 목살 같은 돼지고기 구이 (자료는 한식 육류 요리 전문점 기준)</small></span></label>
+              <label className="m-choice"><input type="radio" name="ind" checked={profile.industry === "cafe"} onChange={() => set({ industry: "cafe" })} /><span>카페<small>커피, 음료, 디저트 (자료는 독립 카페 기준, 동네 분석부터 열려 있어요)</small></span></label>
             </div>
           </fieldset>
         )}
@@ -96,6 +97,18 @@ export default function ProfileStep({ profile, setProfile, gus, onDone }: {
               <label htmlFor="cap">만원</label>
             </div>
             <p id="cap-read" className="m-moneyread">{profile.capital >= 500 ? man(profile.capital) : "500만원 이상을 적어 주세요"}</p>
+            {profile.industry === "cafe" && (
+              <p className="m-moneyref">
+                실제 독립 카페는 인테리어, 머신과 주방, 가구 같은 시설에 중앙값 {man(6000)}을 들였어요. 4분의 1은 {man(3000)} 아래, 4분의 1은 {man(9000)} 위예요.
+                보증금과 권리금은 이 금액에 안 들어 있어요 (경영실태조사 2025 원자료, 카페 팀 v6 정리, 전국).
+              </p>
+            )}
+            {profile.industry === "bbq" && invest && (
+              <p className="m-moneyref">
+                실제 고깃집(한식 육류 요리 전문점)은 공사, 주방, 홀 같은 시설에 중앙값 {man(Math.round(invest.p50 / 100) * 100)}을 들였어요. 4분의 1은 {man(Math.round(invest.p25 / 100) * 100)} 아래,
+                4분의 1은 {man(Math.round(invest.p75 / 100) * 100)} 위예요. 보증금과 권리금은 이 금액에 안 들어 있어요 (경영실태조사 2025, 전국, 응답 {invest.n}곳).
+              </p>
+            )}
             <div className="m-presets">
               {PRESETS.map((p) => <button type="button" key={p} onClick={() => set({ capital: p })}>{man(p)}</button>)}
             </div>
@@ -113,7 +126,8 @@ export default function ProfileStep({ profile, setProfile, gus, onDone }: {
           </fieldset>
         )}
 
-        <div className="m-actions">
+        <div className={`m-actions ${i > 0 ? "m-actions-row" : ""}`}>
+          {i > 0 && <button type="button" className="m-btn m-btn-quiet" onClick={() => move(i - 1)}>이전</button>}
           <button type="submit" className="m-btn" disabled={!valid}>{i === QUESTIONS.length - 1 ? "동네 분석 보기" : "다음"}</button>
         </div>
       </form>

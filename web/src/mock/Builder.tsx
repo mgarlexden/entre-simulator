@@ -89,11 +89,11 @@ export default function Builder({ profile, store, setStore, levers, setLevers, o
   const [tool, setTool] = useState<Tool>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [ghost, setGhost] = useState<{ x: number; z: number; ok: boolean } | null>(null);
-  const [msg, setMsg] = useState("가진 돈과 이 동네 손님 수에 맞춘 추천 배치예요. 아래에서 골라 바닥을 누르면 더 놓을 수 있어요.");
+  const [msg, setMsg] = useState("주방만 있는 빈 가게예요. 아래에서 테이블과 설비를 골라 바닥을 눌러 놓거나, 왼쪽 위의 '추천 배치'를 눌러 보세요.");
   const portal = useRef<HTMLDivElement>(null);
 
   const stats = storeStats(store);
-  const cost = openingCost(store, profile.gu);
+  const cost = openingCost(store, profile.gu, profile.keyMoney ?? 0);
   const left = cashLeft(profile, store);
   const { w, d } = roomSize(store.pyeong);
   const count = (id: string) => store.items.filter((i) => i.id === id).length;
@@ -213,11 +213,11 @@ export default function Builder({ profile, store, setStore, levers, setLevers, o
             <button type="button" aria-label="직원 1명 늘리기" disabled={levers.staff >= 8} onClick={() => setLevers({ ...levers, staff: levers.staff + 1 })}>+</button>
           </div>
           <p>테이블 {stats.tables}개, {stats.seats}석</p>
-          <button type="button" className="m-link" onClick={() => {
+          <button type="button" className="m-btn m-btn-quiet m-recbtn" onClick={() => {
             const plan = recommend(profile);
             setStore(plan.store); setLevers({ ...levers, staff: plan.staff }); setSelected(null); setTool(null);
-            setMsg(`추천 배치로 되돌렸어요. ${plan.store.pyeong}평, 테이블 ${storeStats(plan.store).tables}개, 직원 ${plan.staff}명이에요.${plan.safe ? "" : " 이 돈으로는 6개월을 버티는 구성을 찾지 못했어요."}`);
-          }}>추천 배치로 되돌리기</button>
+            setMsg(`추천 배치를 놓았어요. ${plan.store.pyeong}평, 테이블 ${storeStats(plan.store).tables}개, 직원 ${plan.staff}명이에요.${plan.safe ? "" : " 이 돈으로는 6개월을 버티는 구성을 찾지 못했어요."}`);
+          }}>추천 배치</button>
         </div>
 
         <div className={`m-cash ${left < 0 ? "is-short" : ""}`}>

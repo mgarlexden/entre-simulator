@@ -62,7 +62,7 @@ export default function Engine() {
       seed, opening, own_capital: capital * 1e4, owner_draw: draw * 1e4, invest,
       loan: loan > 0 ? { principal: loan * 1e4, annual_rate: 0.06, term_months: 60, grace_months: 60 } : null,
       store: {
-        gu_sales_man: input.st.sales, pyeong: input.plan.store.pyeong, tables: Math.max(1, input.s.tables), seats: input.s.seats,
+        gu_sales_man: input.st.salesHansik, pyeong: input.plan.store.pyeong, tables: Math.max(1, input.s.tables), seats: input.s.seats,
         cash_rent_man_per_pyeong: input.st.rent, staff: input.plan.staff, price: 19000, baseline_runs: 150,
         quarter_index: input.st.qidx, area_type: input.st.areaType ?? "일반",
       },

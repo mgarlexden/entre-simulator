@@ -7,8 +7,9 @@ type Weak = { value: string; state: string; applied: string; note: string } | nu
 type Q22 = { applied: string; value: string; note: string } | null;
 type Gap = {
   pri: string; area: string; var: string; section: "상권·입지" | "매장 운영" | "그 외"; old: string; old_grade: string; gap: string;
-  now: string; now_grade: string; status: string; filler: string; weak: Weak; q22: Q22; how: string; cand: string; web_note?: string;
+  now: string; now_grade: string; status: string; filler: string; weak: Weak; q22: Q22; how: string; cand: string; web_note?: string; v6?: V6;
 };
+type V6 = { value: string; state: string; note: string } | null;
 type Data = { gaps: Gap[]; counts: Record<string, number>; remain_by_section: Record<string, number> };
 
 const BRANCHES = [
@@ -46,9 +47,10 @@ const FILES = [
   { id: "약한 근거 보완_1014.xlsx", date: "2026-10-14 작성, 파일 수정 10-15 09:14", who: "같은 팀원 (건희 데이터 3번 시트의 약한 근거 12개를 보고 채움)", what: "12개 변수 중 8개 채움, 1개 일부 채움, 2개 보류, 값은 없지만 근거를 확보한 것 포함. '전기 계절 지수'와 '상권 비교'(2023 서울시 상가임대차 실태조사) 시트가 같이 있음" },
 ];
 
+const V6_FILE = { id: "카페_시뮬레이터_입점_변수자료_v6.xlsx", date: "2026-10-14 작성, Drive 수정 10-15 21:14", who: "같은 팀원 (Drive 카페_자료 모음)", what: "독립(비프랜차이즈) 카페만 걸러 KREI 2025 원자료에서 직접 계산한 창업 조건·비용 91개, 서울 425개 행정동 x 카페 지표 143개, 25개 구 요약, 시도·구별 비용. 건희 변수와 이름이 달라 변수 단위로 대조함" };
 const STATUS_CLASS: Record<string, string> = {
   "채움 · 반영됨": "실측", "건희가 이후 직접 채움": "차용", "채움 · 아직 반영 안 됨": "가정", "채움 · 값이 충돌": "예시값",
-  "일부 채움": "가정", "참고만 가능": "가정", "보류": "예시값", "남음": "예시값",
+  "일부 채움": "가정", "참고만 가능": "가정", "보류": "예시값", "남음": "예시값", "v6 자료로 채움": "실측", "v6 참고값 있음": "가정",
 };
 
 function Status({ s }: { s: string }) { return <b className={`k k-${STATUS_CLASS[s] ?? "가정"}`}>{s}</b>; }
@@ -68,7 +70,7 @@ function GapRows({ rows, cols }: { rows: Gap[]; cols: "filled" | "remain" }) {
       <table>
         <thead><tr><th>우선</th><th>변수</th><th>현재 값</th><th>등급</th><th>무엇이 비어 있나</th><th>찾는 방법</th><th>후보 (미확인 포함)</th></tr></thead>
         <tbody>{rows.map((g, i) => (
-          <tr key={i}><td>{g.pri}</td><td><code>{g.var}</code><br /><small>{g.area}</small></td><td>{g.now}</td><td>{g.now_grade}</td><td>{g.gap}{g.web_note ? <><br /><small>{g.web_note}</small></> : null}</td><td>{g.how}</td><td>{g.cand}</td></tr>
+          <tr key={i}><td>{g.pri}</td><td><code>{g.var}</code><br /><small>{g.area}</small></td><td>{g.now}</td><td>{g.now_grade}</td><td>{g.gap}{g.web_note ? <><br /><small>{g.web_note}</small></> : null}{g.v6 ? <><br /><small>v6 참고: {g.v6.value}</small></> : null}</td><td>{g.how}</td><td>{g.cand}</td></tr>
         ))}</tbody>
       </table>
     );
@@ -77,8 +79,8 @@ function GapRows({ rows, cols }: { rows: Gap[]; cols: "filled" | "remain" }) {
     <table>
       <thead><tr><th>변수</th><th>건희 처음 값 (등급)</th><th>팀원이 찾은 값</th><th>건희 지금 값 (등급)</th><th>상태</th><th>반영·충돌 내용</th></tr></thead>
       <tbody>{rows.map((g, i) => {
-        const team = g.weak?.value ?? g.q22?.value ?? "";
-        const note = g.weak?.note ?? g.q22?.note ?? g.web_note ?? "";
+        const team = g.weak?.value ?? g.q22?.value ?? g.v6?.value ?? "";
+        const note = [g.weak?.note ?? g.q22?.note, g.v6 ? `v6: ${g.v6.note}` : "", g.web_note].filter(Boolean).join(" / ");
         return (
           <tr key={i}>
             <td><code>{g.var}</code><br /><small>{g.area}</small></td>
@@ -112,6 +114,7 @@ export default function SourcesCafe() {
   const weak = g.filter((x) => x.weak);
   const q22 = g.filter((x) => !x.weak && x.q22 && x.status.startsWith("채움") || (!x.weak && x.q22 && x.status === "참고만 가능"));
   const later = g.filter((x) => x.status === "건희가 이후 직접 채움");
+  const v6rows = g.filter((x) => x.status === "v6 자료로 채움" || x.status === "v6 참고값 있음");
   const remain = (s: string) => g.filter((x) => x.section === s && (x.status === "남음" || x.status === "보류"));
   const by = (xs: Gap[]) => {
     const m = new Map<string, number>();
@@ -149,6 +152,8 @@ export default function SourcesCafe() {
               {([
                 ["채움 · 반영됨", "팀원이 찾은 값이 건희 값과 같거나 건희 params.yaml에 이미 들어감"],
                 ["채움 · 아직 반영 안 됨", "팀원이 근거 있는 값을 찾았지만 건희 params.yaml은 옛 값 그대로"],
+                ["v6 자료로 채움", "독립 카페만 걸러 계산한 v6 엑셀(Drive 카페_자료 모음)이 값을 줌"],
+                ["v6 참고값 있음", "v6에 참고할 값이 있으나 변수에 바로 넣기는 어려움"],
                 ["채움 · 값이 충돌", "팀원 값과 건희 값이 서로 다르고 정의도 달라 선택이 필요함"],
                 ["일부 채움", "상한 검산 등 일부만 가능"],
                 ["참고만 가능", "비교·검산용 값이라 변수에 바로 넣을 수 없음"],
@@ -166,7 +171,7 @@ export default function SourcesCafe() {
       <h2 id="c-filled">4. 팀원이 채워 준 것</h2>
       <table>
         <thead><tr><th>파일</th><th>작성</th><th>누가</th><th>내용</th></tr></thead>
-        <tbody>{FILES.map((f) => <tr key={f.id}><td><code>{f.id}</code></td><td>{f.date}</td><td>{f.who}</td><td>{f.what}</td></tr>)}</tbody>
+        <tbody>{[...FILES, V6_FILE].map((f) => <tr key={f.id}><td><code>{f.id}</code></td><td>{f.date}</td><td>{f.who}</td><td>{f.what}</td></tr>)}</tbody>
       </table>
       {d && (
         <>
@@ -176,7 +181,10 @@ export default function SourcesCafe() {
           <h3>4-2. 2-2 정량 데이터_1014.xlsx: 갭 정리표와 맞닿은 값 ({q22.length}행)</h3>
           <p>이 파일은 건희 레포를 보기 전에 정리한 것이라 갭을 겨냥하지는 않았지만, 변수와 맞닿은 값이 있습니다. 위 4-1에 이미 나온 변수는 제외했습니다.</p>
           <GapRows rows={q22} cols="filled" />
-          <h3>4-3. 팀원 값 없이 건희가 이후 직접 채운 것 ({later.length}행)</h3>
+          <h3>4-3. 카페_시뮬레이터_입점_변수자료_v6.xlsx로 채워진 것 ({v6rows.length}행)</h3>
+          <p>독립 카페만으로 다시 계산한 값이라 지금까지 비어 있던 <b>서울 개인카페 매출, 판매 채널 비중, 영업시간, 정책자금 한도·상환 기간</b> 등이 채워집니다. 서울 독립 카페 값은 응답 63곳, 구별 값은 구마다 1~8곳이라 표본이 작습니다.</p>
+          <GapRows rows={v6rows} cols="filled" />
+          <h3>4-4. 팀원 값 없이 건희가 이후 직접 채운 것 ({later.length}행)</h3>
           <p>갭 정리표를 만든 뒤 건희가 다나와·정보공개서·농경연 2025 표로 직접 올린 값입니다. 남은 갭에서 빼기 위해 같이 적습니다.</p>
           <GapRows rows={later} cols="filled" />
         </>
@@ -212,16 +220,17 @@ export default function SourcesCafe() {
         </>
       )}
 
-      <h2 id="c-summary">6. 요약: 카페를 고깃집과 같은 구조로 구현할 수 있나, 팀원이 더 찾을 것</h2>
-      <p><b>구현은 가능하지만 시뮬레이션 숫자는 아직 비교용입니다.</b> 변수 구조는 건희 엔진에 모두 있고, 건희 웹 포트(changeup/lean)에는 카페 경로가 구현돼 있습니다.
-        부족한 것은 변수가 아니라 값의 근거입니다.</p>
+      <h2 id="c-summary">6. 요약: 카페를 고깃집과 같은 구조로 구현할 수 있나</h2>
+      <p><b>동네 분석, 드는 돈, 열기 전 점검은 데이터가 충분해졌고, 시뮬레이션만 아직 비교용입니다.</b> 변수 구조는 건희 엔진에 모두 있고,
+        2026-10-16에 Drive의 v6 엑셀(독립 카페만 계산한 값, 서울 425개 행정동 지표)이 들어오면서 개인 카페 기준값이 채워졌습니다. 상세는 7장입니다.</p>
       <table>
         <thead><tr><th>단계</th><th>판단</th><th>이유</th></tr></thead>
         <tbody>
-          <tr><td>동네 분석 (구별 카페 매출, 점포 수, 월세)</td><td><b className="k k-실측">충분</b></td><td>서울시 카페 매출과 R-ONE 월세가 H 등급이고 25개 구를 계산함</td></tr>
-          <tr><td>드는 돈</td><td><b className="k k-실측">대체로 충분</b></td><td>장비·가구·인테리어·권리금이 M. 신촌·성수 보증금과 전기 증설만 약함</td></tr>
-          <tr><td>열기 전 점검</td><td><b className="k k-가정">부분적</b></td><td>인건비·수수료·원가는 M~H. 경쟁 개점 영향과 고장 확률은 가정</td></tr>
-          <tr><td>시뮬레이션 (12개월)</td><td><b className="k k-예시값">부족</b></td><td>시즌 변수 57개 중 51개가 가정. 단골, 별점, 이탈, 마케팅 효과에 근거가 없음</td></tr>
+          <tr><td>동네 분석 (구·동네별 카페 매출, 점포 수, 경쟁, 월세)</td><td><b className="k k-실측">충분</b></td><td>25개 구 182개 변수와 425개 행정동 지표(v6)가 있음. 매출·점포·시간대는 서울시 H, 월세는 R-ONE H</td></tr>
+          <tr><td>드는 돈</td><td><b className="k k-실측">충분</b></td><td>독립 카페 기준 개업 투자비 6,000만원(3,000~9,000: 인테리어 3,000, 주방 1,500, 홀 1,000), 인테리어 평당 150만원, 보증금 3,000만원, 권리금 2,500만원, 총 창업비용 1억 1,000만원(6,500~15,000)이 H. 상권별 보증금만 서울 값으로 대신함</td></tr>
+          <tr><td>모자란 돈 (대출)</td><td><b className="k k-가정">대체로 충분</b></td><td>정책자금 한도 7,000만원·5년(거치 2년)·기준금리+0.6%p가 있음 (업계 글 M, 공고 원문 확인 필요)</td></tr>
+          <tr><td>열기 전 점검</td><td><b className="k k-실측">충분</b></td><td>독립 카페 비용 구조(식재료 40%, 고용인 인건비 11%, 임차료 10%, 영업이익률 10%)와 객단가 5,000원, 영업일 26일이 H. 경쟁 개점 영향과 월세 인상 확률만 가정</td></tr>
+          <tr><td>시뮬레이션 (12개월)</td><td><b className="k k-예시값">비교용</b></td><td>수요 기준선과 채널 비중은 채워졌으나 단골, 별점, 이탈, 마케팅, 사건 확률은 여전히 가정 (시즌 변수 57개 중 51개)</td></tr>
         </tbody>
       </table>
 
@@ -229,15 +238,16 @@ export default function SourcesCafe() {
       <table>
         <thead><tr><th>기능</th><th>있는 데이터</th><th>부족한 데이터</th><th>채우는 방법</th></tr></thead>
         <tbody>
-          <tr><td>동네 분석: 구별 카페 매출·점포 수·월세</td><td>서울시 카페 매출·점포(H), R-ONE 월세(H), 25개 구</td><td>서울 개인카페(비프랜차이즈) 매출 <code>independent_scale</code>. 상권 시간대 비중은 3곳뿐</td><td>통계: KREI 비프랜차이즈×서울 교차표, 소상공인실태조사(MDIS)</td></tr>
-          <tr><td>드는 돈: 보증금·권리금·인테리어·장비</td><td>장비·가구·인테리어·포장재 단가(M), 서울 권리금 중앙값(M)</td><td>신촌·성수 보증금 <code>deposit_per_pyeong_krw</code>, 전기 증설 <code>electrical</code>, 상권별 권리금(근거는 있으나 미반영)</td><td>통계: 서울시 상가임대차 실태조사 구 단위 표. 반영은 건희 params.yaml</td></tr>
-          <tr><td>모자란 돈: 대출</td><td>금리 4.5%(M)</td><td>한도·상환 기간 <code>loan_term_months</code>, 운전자금 개월 수</td><td>통계: 소진공 정책자금 공고. 개월 수는 설계 결정</td></tr>
-          <tr><td>열기 전 점검: 본전·나쁜 경우</td><td>인건비·4대보험·카드 수수료(H~M), 대표자 인건비(M), 월세 인상 상한 5%(H)</td><td>신용·체크카드 비중 <code>card_share</code>, 임대료 인상 확률 <code>rent_hike_p</code>, 경쟁 개업 비율 <code>rival_nearby_share</code>, 경쟁 개점 영향 <code>rival_demand_mult</code></td><td>통계: 여신금융협회, 상권별 개업 수로 계산, 경쟁 효과 문헌</td></tr>
-          <tr><td>시뮬: 수요 (손님 수·잔 수)</td><td>업계 평균 매출·결제 1건 금액·시간대 비중(M~H), 결제당 잔 수 1.6(M)</td><td>오픈 초기 매출 비율 <code>launch_share</code>, 동행 인원 <code>persons_per_cup</code>, 가격 탄력성 <code>price_elasticity</code></td><td>인터뷰 + 범위 처리(낮음/기본/높음)</td></tr>
-          <tr><td>시뮬: 처리 능력 (바리스타·머신·좌석)</td><td>바리스타 시간당 45잔(M), 주문 시간(M), 머신 상한 검산</td><td>머신 그룹별 실제 잔 수 <code>machine_cph_by_groups</code>, 바리스타 인원 <code>baristas_by_groups</code>, 주문 겸할 때 효율 <code>barista_on_pos_order_factor</code></td><td>인터뷰(바리스타), 제조사 문의, 현장 관찰</td></tr>
-          <tr><td>시뮬: 월 운영비·원가</td><td>디저트 원가율, 포장재, 관리비, 전기(웹 경로 M)</td><td>수도·가스 <code>water_gas_krw</code>(가스), 기타 경비 <code>misc_krw</code>, 디저트 폐기율 <code>dessert_waste_share</code></td><td>인터뷰, KREI 기타비용으로 교체 결정</td></tr>
-          <tr><td>시뮬: 단골·별점·마케팅</td><td>없음 (전부 가정)</td><td><code>regular_share</code>, <code>regulars_speed</code>, <code>rating_demand_per_star</code>, <code>marketing_max_lift</code></td><td>찾기 어려움: 범위 처리하고 인터뷰로 방향만 확인</td></tr>
-          <tr><td>시뮬: 사건 (고장·화제·월세 인상)</td><td>월세 인상 상한(H)</td><td><code>breakdown_p</code>, <code>viral_p</code>, <code>viral_demand_mult</code> 등 확률·크기</td><td>인터뷰(고장), 나머지는 범위 처리</td></tr>
+          <tr><td>동네 분석: 구별 카페 매출·점포 수·월세</td><td>25개 구 + 425개 행정동: 보정 점포당 월매출, 매출 지수, 건당 결제, 시간대·요일·연령 비중, 프랜차이즈 비중, 카페 밀도, 개·폐업률, 유동·직장·상주 인구, 역세권</td><td>상권 단위(골목·발달·전통시장) 지표는 아직 미사용. 집객시설·대학교 수는 갱신 의심(L)</td><td>Drive 상권 단위 CSV(이미 받음)를 같은 방식으로 집계</td></tr>
+          <tr><td>드는 돈: 보증금·권리금·인테리어·장비</td><td>독립 카페 투자비·인테리어·주방·홀·보증금·권리금 분위수(H), 건희의 장비 단가(M)</td><td>신촌·성수 등 상권별 보증금 (서울 값만 있음), 전기 증설 <code>electrical</code></td><td>통계: 서울시 상가임대차 실태조사 구 단위 표</td></tr>
+          <tr><td>모자란 돈: 대출</td><td>금리 4.5%(M), 한도 7,000만원, 5년(거치 2년)</td><td>정책자금 공고 원문 확인, 운전자금 개월 수 <code>working_capital_months</code></td><td>소진공 공고. 개월 수는 설계 결정</td></tr>
+          <tr><td>열기 전 점검: 본전·나쁜 경우</td><td>독립 카페 비용 구조 25/50/75백분위, 인건비·4대보험·카드 수수료, 월세 인상 상한 5%</td><td>신용·체크카드 비중 <code>card_share</code>, 임대료 인상 확률 <code>rent_hike_p</code>, 경쟁 개점 영향 <code>rival_demand_mult</code></td><td>통계: 여신금융협회. 경쟁 효과는 문헌</td></tr>
+          <tr><td>시뮬: 수요 (손님 수·잔 수)</td><td>서울 독립 카페 월매출 1,460만원(n=63), 객단가 5,000원, 방문 49명/일, 채널 비중 홀 71.9·포장 22.0·배달 6.2%</td><td>오픈 초기 매출 비율 <code>launch_share</code>, 동행 인원 <code>persons_per_cup</code>, 가격 탄력성 <code>price_elasticity</code></td><td>인터뷰 + 범위 처리(낮음/기본/높음)</td></tr>
+          <tr><td>시뮬: 배달 채널</td><td>배달앱 중개수수료 2.0/6.8/7.8%, 점주 배달비 1,900~3,400원, 배달앱 월 비용 13.3만원(독립 중앙값), 1일 배달 17건, 배달앱 사용률 17.5%</td><td>배달이 매장 손님을 옮기는지 더하는지 (대체 vs 추가)</td><td>범위 처리. 엔진에 채널 변수 추가 필요 (건희 엔진에는 없음)</td></tr>
+          <tr><td>시뮬: 처리 능력 (바리스타·머신·좌석)</td><td>바리스타 시간당 45잔(M), 주문 시간(M), 머신 상한 검산, 직원 구성·인건비(독립 알바 월 150만원, 상용 250만원)</td><td>머신 그룹별 실제 잔 수 <code>machine_cph_by_groups</code>, 주문 겸할 때 효율 <code>barista_on_pos_order_factor</code></td><td>인터뷰(바리스타), 제조사 문의</td></tr>
+          <tr><td>시뮬: 월 운영비·원가</td><td>식재료·인건비·임차료·세금공과·기타비 비율과 월 금액, 원두 월 구매량 40kg, 디저트 재료 구매 금액</td><td>디저트 폐기율 <code>dessert_waste_share</code>, 수도·가스 분리 값</td><td>인터뷰</td></tr>
+          <tr><td>시뮬: 단골·별점·마케팅</td><td>없음 (생존율 1·3·5년 83.5/53.2/34.6%는 검증용으로만)</td><td><code>regular_share</code>, <code>regulars_speed</code>, <code>rating_demand_per_star</code>, <code>marketing_max_lift</code></td><td>범위 처리하고 인터뷰로 방향만 확인</td></tr>
+          <tr><td>시뮬: 사건 (고장·경쟁·월세 인상)</td><td>경영 애로 점수(식재료비 5.89, 경쟁 5.66, 임차료 5.28, 규제 5.26, 인건비 4.70, 7점 만점)로 사건 가중치 방향, 월세 인상 상한 5%</td><td>고장·화제 확률과 크기 <code>breakdown_p</code>, <code>viral_p</code></td><td>인터뷰(고장), 나머지는 범위 처리</td></tr>
         </tbody>
       </table>
 
@@ -245,8 +255,80 @@ export default function SourcesCafe() {
       <table>
         <thead><tr><th>구분</th><th>항목</th><th>필요한 일</th></tr></thead>
         <tbody>
-          <tr><td><Status s="채움 · 값이 충돌" /> 5건</td><td><code>independent_scale</code> 0.72 ↔ 건희의 업계 평균 방식, <code>dessert_food_cost_share</code> 0.30 ↔ 0.40, 신촌·성수 보증금, <code>dine_in_share</code> 64.8% ↔ 49.4%</td><td>정의가 달라 어느 쪽을 쓸지 건희와 결정</td></tr>
-          <tr><td><Status s="채움 · 아직 반영 안 됨" /> 6건</td><td><code>misc_krw</code>, 신촌·성수 권리금, <code>electricity_anchor_20py_krw</code>, <code>vat_refund_month</code>, <code>electrical</code></td><td>근거는 이미 있음. 건희 params.yaml에 반영만 하면 됨</td></tr>
+          <tr><td><Status s="채움 · 값이 충돌" /> 3건</td><td><code>dessert_food_cost_share</code> 0.30(도매가) ↔ 0.40(제과점 원가율), 신촌·성수 보증금(v6는 서울 값뿐)</td><td>정의가 달라 어느 쪽을 쓸지 건희와 결정</td></tr>
+          <tr><td><Status s="채움 · 아직 반영 안 됨" /> 5건</td><td>신촌·성수 권리금, <code>electricity_anchor_20py_krw</code>, <code>vat_refund_month</code>, <code>electrical</code></td><td>근거는 이미 있음. 건희 params.yaml에 반영만 하면 됨</td></tr>
+          <tr><td><Status s="v6 자료로 채움" /> 6건</td><td><code>independent_scale</code>, <code>dine_in_share</code>, <code>misc_krw</code>, 영업 시작·마감 시각, <code>loan_term_months</code></td><td>7-3의 값 차이를 보고 건희 params.yaml에 어느 값을 넣을지 결정</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="c-drive">7. Drive 자료 반영: 카페 데이터 구축 현황 (2026-10-16)</h2>
+      <p>Drive 폴더 <b>카페_자료 모음</b>과 Claude 아티팩트 '서울 카페 상권 리서치'를 검토해 카페용 데이터 묶음을 만들었습니다.
+        고깃집의 <code>gu_stats.json</code>, <code>dong_stats.json</code>, <code>kosis_food.json</code>에 해당하는 파일이 카페에도 생겼습니다.</p>
+
+      <h3>7-1. 만든 데이터 파일</h3>
+      <table>
+        <thead><tr><th>파일</th><th>내용</th><th>고깃집의 대응 파일</th><th>만드는 법</th></tr></thead>
+        <tbody>
+          <tr><td><code>web/public/mock/cafe_gu.json</code></td><td>서울 + 25개 구 x 카페 변수 182개 (매출 지수, 건당 결제, 시간대·요일·연령 비중, 프랜차이즈 비중, 개·폐업률, 유동·직장·상주 인구, 역세권, 소득 대리 지표 등). 변수마다 확신도 H/M/L과 출처</td><td><code>gu_stats.json</code></td><td rowSpan={3}><code>python -m pipelines.build_cafe_data &lt;v6 엑셀&gt;</code></td></tr>
+          <tr><td><code>web/public/mock/cafe_dong.json</code></td><td>서울 425개 행정동의 카페 핵심 지표 50개와 동네 유형. 유형은 고깃집과 같은 문턱을 카페 매출 비중에 적용한 규칙 분류: 일반 242, 오피스 76, 주거 73, 대학·청년 34 (혜화동·신촌동은 대학·청년, 가산동은 오피스)</td><td><code>dong_stats.json</code></td></tr>
+          <tr><td><code>web/public/mock/cafe_cost.json</code></td><td>독립 카페 창업 조건·비용 91개(낮음/기본/높음 = 매장 분포 25/50/75백분위, 확신도, 출처)와 참고값 18개, 시도별·서울 구별 월세·보증금·권리금·인건비·식재료비율</td><td><code>kosis_food.json</code> + <code>model.ts</code> 상수</td></tr>
+        </tbody>
+      </table>
+      <p>값은 v6 엑셀에 적힌 그대로 옮기고 반올림만 했습니다. 엑셀 자체는 저장소 밖(<code>entre/</code> 폴더)에 둡니다.</p>
+
+      <h3>7-2. Drive 자료 검토</h3>
+      <table>
+        <thead><tr><th>자료</th><th>담긴 것</th><th>이번에 한 일</th><th>신뢰도와 주의</th></tr></thead>
+        <tbody>
+          <tr><td><code>카페_시뮬레이터_입점_변수자료_v6.xlsx</code></td><td>독립 카페만 걸러 KREI 2025 원자료에서 계산한 1단계 창업 조건, 2단계 서울 행정동·25개 구 지표, 상권별 매출 패턴, 서울 외 13개 시도 덤프</td><td>위 3개 JSON으로 변환, 건희 갭 106개와 변수 단위로 대조 (4-3)</td><td>1단계는 H 위주지만 서울 독립 카페는 응답 63곳, 구별은 1~8곳. 추정매출은 카드 기반이라 실제보다 낮음(보정 배율 1.54를 적용한 열을 따로 둠)</td></tr>
+          <tr><td><code>F&amp;B 데이터 (로우데이터 포함).xlsx</code></td><td>KREI 2025 외식업체 경영실태조사 원자료: 표본 2,747곳, 업종 세분류별 비율·사업체 수, 지역별 사업체 수, 소상공인 비중, 표본·모집단 raw</td><td>구조만 확인. 카페 값은 v6가 이미 이 자료에서 계산함</td><td>H. <b>한식 육류 요리 238곳이 들어 있어 고깃집 단독 손익·설비 단가 갭에 쓸 수 있음</b> (7-5)</td></tr>
+          <tr><td><code>상권 관련/</code> 폴더 (서울시 상권분석서비스 원자료 CSV 49개, 지하철 역사 3개)</td><td>추정매출·점포·길단위인구·상주·직장인구·집객시설·아파트·소득소비·상권변화지표를 상권·상권배후지·행정동·자치구·서울시 단위로</td><td>내려받지 않음 (파일이 커서 최대 100MB). 행정동 단위는 v6가 이미 집계함</td><td>H. 상권 단위로 보려면 같은 방식으로 추가 집계 필요 (v6 미확보 시트에도 같은 항목)</td></tr>
+          <tr><td><code>소상공인시장진흥공단_상가(상권)정보_서울_202606.csv</code></td><td>서울 상가업소 전체 (약 300MB)</td><td>내려받지 않음. v6가 카페 수·프랜차이즈·개인 카페·무인카페를 집계함</td><td>H. 카페 유형 분류는 상호명 규칙이라 오분류 가능</td></tr>
+          <tr><td>Claude 아티팩트 「서울 카페 상권 리서치」</td><td>6개 상권(대학로·신촌·서울대입구·가산·망원·성수) 2021~2026 매출·점포·인구, 인허가·폐업, KOSIS 가격지수, 배달앱 사용률, 정보공개서 창업비용, 최저임금, 배달 수수료, 논문 4편, 점포 목록 12,155곳</td><td>상권 6곳 값과 비용 변수를 대조에 사용. 일부는 아래 7-4처럼 제외</td><td>1~11장은 API 직접 집계(H), 13~14장은 기사 인용(미확인 표시 있음), 15~16장은 쓰지 않음</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7-3. 건희 값과 v6 값이 다른 곳</h3>
+      <p>서로 다른 정의에서 나온 값이라 어느 쪽이 맞는다고 단정할 수 없는 항목입니다. 반영 전에 결정이 필요합니다.</p>
+      <table>
+        <thead><tr><th>항목</th><th>건희 (카페 브랜치)</th><th>v6 (독립 카페)</th><th>차이의 원인과 결정</th></tr></thead>
+        <tbody>
+          <tr><td>서울 평균 점포당 월매출</td><td>1,082만원(2025 4분기 웹) ~ 1,164만원(2026Q2 엔진)</td><td>949만원 (카드 추정, 보정 전)</td><td>점포 수 분모가 다름으로 추정 (확인 안 함). 건희는 유사업종 점포 수, v6는 행정동 점포 수</td></tr>
+          <tr><td>개인 카페 수요 기준</td><td>전국 음료점 평균 연 1억 9,033만원(프랜차이즈 포함) x 구 지수</td><td>서울 독립 월 1,460만원(n=63), 전국 독립 연 1억 3,507만원 평균 / 1억 234만원 중앙값</td><td>서울 독립 / 건희 기준 = 0.92배, 전국 독립 평균 / 건희 기준 = 0.71배. 서울 표본이 작아 0.71~0.92 범위로 둠</td></tr>
+          <tr><td>판매 채널</td><td>매장 49.4% / 테이크아웃 50.6% (오픈서베이 설문, 지출 기준)</td><td>홀 71.9% / 포장 22.0% / 배달 6.2% (독립 카페 점포 매출 기준)</td><td>설문과 점포 매출은 정의가 다름. 점포 매출 기준(v6)이 시뮬 입력에 더 맞음</td></tr>
+          <tr><td>권리금</td><td>3,990만원 (R-ONE 서울 숙박·음식점업 중앙값)</td><td>3,000만원 (독립 카페 중앙값, 낸 매장만). 낸 비율 서울 76.3%</td><td>낸 비율을 곱하면 기대값 약 2,290만원. 업종 범위가 달라 어느 쪽을 쓸지 결정 필요</td></tr>
+          <tr><td>보증금</td><td>대학로 5,320만원(평당 266만원 환산), 신촌·성수는 가정</td><td>서울 독립 카페 3,000만원 (n=40)</td><td>상권별 값이 아니라 서울 값이라 신촌·성수 갭은 그대로</td></tr>
+          <tr><td>평당 월세</td><td>R-ONE 환산임대료 혜화 19.8만원</td><td>독립 카페 서울 계약 월세 ÷ 평수 중앙값 10만원 (구별 3~23만원, 1~8곳)</td><td>환산임대료는 보증금 환산분 포함, 계약 월세는 실제 지불액. 표본이 작아 구별 비교는 참고만</td></tr>
+          <tr><td>영업일 / 마감 시각</td><td>28일 (농경연 표25 평균) / 22시</td><td>26일 (중앙값) / 21시 (낮음 19, 높음 22)</td><td>평균과 중앙값, 가정과 직접 값의 차이. 기본값을 바꿀지 결정</td></tr>
+          <tr><td>대표자 인건비</td><td>월 211만원 (커피전문점 평균 연 2,533만원 ÷ 12)</td><td>월 158만원 중앙값 (낮음 70, 높음 268)</td><td>평균 대 중앙값. 어느 쪽을 쓸지에 따라 월 순익이 바뀜</td></tr>
+          <tr><td>식재료비율 / 영업이익률</td><td>38.9% / 9.8% (비알코올 음료점, 이투데이 경유)</td><td>40% (평균 42.2%) / 10%</td><td>거의 일치. 건희 값을 유지해도 됨</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7-4. 쓰지 않았거나 조심할 자료</h3>
+      <ul>
+        <li><b>아티팩트 15~16장(창업 비용 손익, KAMIS 재료비 시뮬레이션)은 쓰지 않았습니다.</b> 15.2의 임차료·인건비 비중(15~25%, 30~40%)이 14.5장(10~15%, 15~25%)과 다르고, 16.3의 고정비(임차료 2,500만원, 인건비 1,040만원)는 월 매출 1,456만원 규모의 카페와 맞지 않으며, 16.2는 쌈채소 같은 고깃집 재료를 카페 재료로 적었습니다.</li>
+        <li><b>논문 3편(무인카페)</b>은 점주 20명, 대학생 296명 표본입니다. 가격 수용 범위와 의사결정 인사이트는 일반 카페에 그대로 옮기지 않고 참고만 합니다. 네 번째 논문(골목상권 1,090곳)의 매출 요인(외식업 수 +, 집객시설 +, 상주인구 −)은 상권 합계 매출 기준으로 보여 점포당 매출 변수로 쓰기에는 맞지 않습니다.</li>
+        <li><b>6개 상권 값은 6곳뿐</b>이라 25개 구 확장에는 v6의 구·행정동 값을 씁니다. 대학로는 인허가 표본이 58곳이라 비율 해석을 조심해야 합니다.</li>
+        <li><b>기사 인용 값</b>(최저임금 2027년 10,700원 미고시, 배달 수수료 상생안 현행 여부, 일회용컵 정책 시행 여부, 정책자금 한도)은 원문을 확인하지 못했다고 자료 자체가 표시한 것이 많습니다.</li>
+        <li>집객시설 수·대학교 수는 2021년 이후 서울 합계가 분기마다 같은 값이라 갱신이 의심돼 확신도 L입니다.</li>
+      </ul>
+
+      <h3>7-5. 고깃집에도 쓸 수 있는 것</h3>
+      <ul>
+        <li><b>F&amp;B 원자료의 한식 육류 요리 238곳</b>: 고깃집 단독 손익(식재료비·인건비·임차료·영업이익률), 개업 투자비(인테리어·주방·홀), 객단가, 좌석·테이블이 같은 방식으로 계산됩니다. 고깃집 탭의 가장 큰 갭('육류 전문점 단독 손익', '설비 단가')이 여기서 채워질 수 있습니다. 아직 계산하지 않았습니다.</li>
+        <li>정책자금 한도·기간·금리는 업종 무관이라 고깃집의 '모자란 돈' 갭에도 그대로 쓸 수 있습니다.</li>
+      </ul>
+
+      <h3>7-6. 남은 데이터 작업</h3>
+      <table>
+        <thead><tr><th>순서</th><th>일</th><th>이유</th></tr></thead>
+        <tbody>
+          <tr><td>1</td><td>7-3의 충돌 항목(수요 기준, 채널 비중, 권리금, 영업일·마감) 결정</td><td>값이 이미 있으나 어느 쪽을 쓸지 정해야 건희 params.yaml과 카페 화면이 같은 값을 씀</td></tr>
+          <tr><td>2</td><td>F&amp;B 원자료에서 한식 육류 요리 계산 (고깃집 갭)</td><td>고깃집의 가장 큰 갭이 채워짐</td></tr>
+          <tr><td>3</td><td>상권 단위 CSV(Drive)를 행정동과 같은 방식으로 집계</td><td>골목·발달·전통시장 단위 비교</td></tr>
+          <tr><td>4</td><td>카페 화면용 모델 연결: <code>cafe_gu.json</code>, <code>cafe_dong.json</code>, <code>cafe_cost.json</code>을 동네 분석·드는 돈·점검에 연결</td><td>고깃집과 같은 흐름(동네 분석, 가게 꾸미기, 점검, 시뮬)으로 구현. 3D는 후순위</td></tr>
+          <tr><td>5</td><td>인터뷰와 범위 처리 대상(단골, 별점, 고장, 마케팅 등 시뮬 가정) 정리</td><td>시뮬 숫자를 비교용에서 범위로 보여 주는 수준으로</td></tr>
         </tbody>
       </table>
     </>
