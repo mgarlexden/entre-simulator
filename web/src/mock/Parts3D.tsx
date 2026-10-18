@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { Box, C } from "../store3d/Building";
+import { Storefront, WALL_H, Wall } from "./Scene3D";
 import { CELL, GRADES, ITEM, type Grade, type Placed } from "./model";
 
 const WOOD = "#8a5a3c", DARK = "#2b2d30", LEAF = "#4d7a4a", PARTITION = "#e9e2d4";
@@ -14,6 +15,13 @@ export const SEATS: Record<string, [number, number][]> = {
 };
 export function seatSpots(items: Placed[]): [number, number][] {
   return items.flatMap((it) => (SEATS[it.id] ?? []).map(([x, z]): [number, number] => (it.rot ? [it.x + z, it.z - x] : [it.x + x, it.z + z])));
+}
+// the same stools as seatSpots (same order) with the heading that faces the table centre (forward = (sin h, cos h))
+export function seatPoses(items: Placed[]): [number, number, number][] {
+  return items.flatMap((it) => (SEATS[it.id] ?? []).map(([x, z]): [number, number, number] => {
+    const [px, pz] = it.rot ? [it.x + z, it.z - x] : [it.x + x, it.z + z];
+    return [px, pz, Math.atan2(it.x - px, it.z - pz)];
+  }));
 }
 
 export function Cyl({ p, r, h, color, metal = 0 }: { p: [number, number, number]; r: number; h: number; color: string; metal?: number }) {
@@ -98,12 +106,18 @@ export function Room({ w, d, grade }: { w: number; d: number; grade: Grade }) {
     <group>
       <Box p={[0, -0.05, 0]} s={[w, 0.1, d]} color={g.floor} receive />
       <lineSegments geometry={lines}><lineBasicMaterial color="#191f28" transparent opacity={0.12} /></lineSegments>
-      <Box p={[0, 1.3, -d / 2 - 0.06]} s={[w + 0.24, 2.6, 0.12]} color={g.wall} />
-      <Box p={[-w / 2 - 0.06, 1.3, 0]} s={[0.12, 2.6, d]} color={g.wall} />
-      <Box p={[0, 0.45, -d / 2 + 0.005]} s={[w, 0.9, 0.02]} color={C.wainscot} />
-      <Box p={[-w / 2 + 0.005, 0.45, 0]} s={[0.02, 0.9, d]} color={C.wainscot} />
+      {/* walls hide on the camera side when seen from above; the street side is glass with the door gap */}
+      <Wall p={[0, WALL_H / 2, -d / 2 - 0.06]} s={[w + 0.24, WALL_H, 0.12]} color={g.wall} outside={(c) => c.z < -d / 2}>
+        <Box p={[0, 0.45, -d / 2 + 0.005]} s={[w, 0.9, 0.02]} color={C.wainscot} />
+      </Wall>
+      <Wall p={[-w / 2 - 0.06, WALL_H / 2, 0]} s={[0.12, WALL_H, d]} color={g.wall} outside={(c) => c.x < -w / 2}>
+        <Box p={[-w / 2 + 0.005, 0.45, 0]} s={[0.02, 0.9, d]} color={C.wainscot} />
+      </Wall>
+      <Wall p={[w / 2 + 0.06, WALL_H / 2, 0]} s={[0.12, WALL_H, d]} color={g.wall} outside={(c) => c.x > w / 2} />
+      <Storefront x0={-w / 2} x1={w / 2} z={d / 2 + 0.04} door={{ x: w / 2 - 1.2, w: 1 }} mat={false} />
       <Box p={[w / 2 - 1.2, 0.011, d / 2 - 0.25]} s={[1, 0.02, 0.5]} color="#3d63ea" opacity={0.55} />
       <Box p={[0, -0.12, 0]} s={[w + 6, 0.02, d + 6]} color="#e6eaf2" receive />
+      <Box p={[0, -0.1, d / 2 + 1.1]} s={[w + 6, 0.02, 2]} color="#d6d3cc" receive />
     </group>
   );
 }

@@ -5,9 +5,9 @@
 // 엔진 서버(api/changeup.py, 포트 8010)가 필요하다. 목업 계산(sim.ts)은 쓰지 않는다.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
 import { GLGuard } from "../shared/GLGuard";
-import { Items, Room, seatSpots } from "./Parts3D";
+import { Items, Room, seatPoses } from "./Parts3D";
+import { FitControls, People, type Person } from "./Scene3D";
 import "./simulate-engine.css";
 import { setEngineCtx } from "./chatContext";
 import { LOAN_RATE, OWNER_DRAW, guStat, man, openingCost, roomSize, storeStats, type Levers, type Profile, type Store } from "./model";
@@ -192,18 +192,14 @@ function buildDays(r: MonthResult, cashStart: number, year: number, ctx: { imput
 
 // ---------------------------------------------------------------- 3D와 작은 부품
 function Guests({ store, filled }: { store: Store; filled: number }) {
-  const spots = useMemo(() => seatSpots(store.items), [store.items]);
+  const spots = useMemo(() => seatPoses(store.items), [store.items]);
   const order = useMemo(() => spots.map((_, i) => i).sort((a, b) => ((a * 7919) % 13) - ((b * 7919) % 13)), [spots]);
-  return (
-    <>
-      {order.slice(0, filled).map((i) => (
-        <group key={i} position={[spots[i][0], 0, spots[i][1]]}>
-          <mesh position={[0, 0.72, 0]} castShadow><capsuleGeometry args={[0.15, 0.36, 4, 10]} /><meshStandardMaterial color={SHIRTS[i % SHIRTS.length]} roughness={0.8} /></mesh>
-          <mesh position={[0, 1.18, 0]} castShadow><sphereGeometry args={[0.13, 14, 12]} /><meshStandardMaterial color="#f1d3b8" roughness={0.7} /></mesh>
-        </group>
-      ))}
-    </>
-  );
+  // seated low-poly guests (store3d/Figures) facing their grill, forearms toward the table
+  const list = useMemo(() => order.slice(0, filled).map((i): Person => {
+    const [x, z, h] = spots[i];
+    return { x: x - Math.sin(h) * 0.04, z: z - Math.cos(h) * 0.04, heading: h, seated: true, seed: i + 1, shirt: SHIRTS[i % SHIRTS.length], armsUp: 0.5 };
+  }), [order, spots, filled]);
+  return <People list={list} />;
 }
 
 const ico = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
@@ -599,7 +595,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
             <Room w={w} d={d} grade={store.grade} />
             <Items items={store.items} />
             <Guests store={store} filled={view === "intro" || view === "plan" || view === "scenario" ? 0 : filled} />
-            <OrbitControls enablePan={false} target={[0, 0.4, 0]} minDistance={7} maxDistance={30} minPolarAngle={0.2} maxPolarAngle={1.35} />
+            <FitControls box={[-w / 2, -d / 2, w / 2, d / 2 + 0.6]} dir={[0.7, 1.2, 1.6]} />
           </Canvas>
         </GLGuard>
       </div>

@@ -3,10 +3,11 @@
 // The five checks sit below the stage and recompute as the store changes.
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import { Html } from "@react-three/drei";
 import { GLGuard } from "../shared/GLGuard";
 import Checks from "./Checks";
 import { Items, Piece, Room } from "./Parts3D";
+import { FitControls } from "./Scene3D";
 import {
   CATALOG, DEPOSIT_MONTHS, GRADES, ITEM, cashLeft, eul, fits, footprint, guStat, kitchenSpot, man, nextUid, openingCost, roomSize, snap,
   recommend, storeStats, type CatalogItem, type Grade, type Levers, type Placed, type Profile, type Store,
@@ -61,7 +62,7 @@ function Scene({ portal, store, tool, selected, ghost, onFloorMove, onFloorClick
           <group rotation={[0, tool.rot ? Math.PI / 2 : 0, 0]}><Piece id={tool.id} /></group>
         </group>
       )}
-      <OrbitControls makeDefault enablePan={false} target={[0, 0.4, 0]} minDistance={7} maxDistance={30} minPolarAngle={0.2} maxPolarAngle={1.35} />
+      <FitControls box={[-w / 2, -d / 2, w / 2, d / 2 + 0.6]} />
     </>
   );
 }
