@@ -76,6 +76,20 @@ export function Pendant({ x, z, y = 1.8, color = "#2f3337" }: { x: number; z: nu
   );
 }
 
+// The cafe's light rig, shared so both stores read the same: warm sky, soft fill, one shadow-casting sun from the
+// front-left sized to the room (r = half the span to cover). dim < 1 darkens it (a closed day).
+export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: number; dim?: number }) {
+  return (
+    <>
+      <color attach="background" args={["#e9eef6"]} />
+      <hemisphereLight args={["#fff7ea", "#c9c2b6", 0.75 * dim]} />
+      <ambientLight intensity={0.45 * dim} />
+      <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.5 * dim} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
+        shadow-camera-left={-r} shadow-camera-right={r} shadow-camera-top={r} shadow-camera-bottom={-r} shadow-camera-far={40} />
+    </>
+  );
+}
+
 // ---- people
 export type Person = {
   x: number; z: number; heading: number; // forward = (sin h, 0, cos h)

@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { GLGuard } from "../shared/GLGuard";
 import { Box, C } from "../store3d/Building";
 import { hash } from "../store3d/Figures";
-import { FitControls, Pendant, People, Storefront, WALL_H, Wall, type Person } from "./Scene3D";
+import { FitControls, Pendant, People, StoreLights, Storefront, WALL_H, Wall, type Person } from "./Scene3D";
 
 export type LayoutItem = { id: string; type: string; x: number; z: number; rot_deg: number; fits: boolean; w: number; d: number; unassigned?: boolean };
 export type RosterItem = { id: string; role: string; label_ko: string; x: number; z: number; fits: boolean };
@@ -337,11 +337,7 @@ export default function CafeRoom3D({ room, layout, roster = [], occupancy = 0, h
       aria-label="카페 3D 화면. 엔진이 정한 배치대로 창가 바, 테이블과 의자, 키오스크, 카운터의 에스프레소 머신·그라인더·쇼케이스, 뒤쪽 냉장고와 제빙기, 직원과 앉은 손님을 보여 줘요. 공간이 모자라 못 놓은 것은 가게 오른쪽 밖에 빨간 반투명으로 보여요">
       <GLGuard>
         <Canvas shadows camera={{ position: [W * 0.55, Math.max(W, D) * 0.95, D * 1.25], fov: 40 }} dpr={[1, 2]}>
-          <color attach="background" args={["#e9eef6"]} />
-          <hemisphereLight args={["#fff7ea", "#c9c2b6", 0.75]} />
-          <ambientLight intensity={0.45} />
-          <directionalLight position={[-W * 0.4, 12, D * 0.6 + 4]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
-            shadow-camera-left={-R} shadow-camera-right={R} shadow-camera-top={R} shadow-camera-bottom={-R} shadow-camera-far={40} />
+          <StoreLights w={W} d={D} r={R} />
 
           {/* 바깥 땅과 인도 */}
           <Box p={[0, -0.12, 0]} s={[W + 8 + Math.max(0, gx1 - W) * 2, 0.02, D + 8]} color="#e6eaf2" receive />

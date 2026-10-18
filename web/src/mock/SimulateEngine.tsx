@@ -6,8 +6,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
 import { GLGuard } from "../shared/GLGuard";
-import { Items, Room, seatPoses } from "./Parts3D";
-import { FitControls, People, type Person } from "./Scene3D";
+import { Items, Room, TableLife, seatPoses } from "./Parts3D";
+import { FitControls, People, StoreLights, type Person } from "./Scene3D";
 import "./simulate-engine.css";
 import { setEngineCtx } from "./chatContext";
 import { LOAN_RATE, OWNER_DRAW, guStat, man, openingCost, roomSize, storeStats, type Levers, type Profile, type Store } from "./model";
@@ -199,7 +199,13 @@ function Guests({ store, filled }: { store: Store; filled: number }) {
     const [x, z, h] = spots[i];
     return { x: x - Math.sin(h) * 0.04, z: z - Math.cos(h) * 0.04, heading: h, seated: true, seed: i + 1, shirt: SHIRTS[i % SHIRTS.length], armsUp: 0.5 };
   }), [order, spots, filled]);
-  return <People list={list} />;
+  const seated = useMemo(() => order.slice(0, filled), [order, filled]);
+  return (
+    <>
+      <People list={list} />
+      <TableLife items={store.items} seated={seated} />
+    </>
+  );
 }
 
 const ico = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
@@ -590,9 +596,8 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
       <div className="sx-canvas">
         <GLGuard>
           <Canvas shadows camera={{ position: [w * 0.7, Math.max(w, d) * 1.2, d * 1.6], fov: 38 }} dpr={[1, 2]}>
-            <ambientLight intensity={!curDay || curDay.open ? 1.15 : 0.6} />
-            <directionalLight position={[-6, 12, 8]} intensity={!curDay || curDay.open ? 1.7 : 0.5} castShadow shadow-mapSize={[1024, 1024]} />
-            <Room w={w} d={d} grade={store.grade} />
+            <StoreLights w={w} d={d} r={Math.max(w, d) / 2 + 3} dim={!curDay || curDay.open ? 1 : 0.45} />
+            <Room w={w} d={d} grade={store.grade} pyeong={store.pyeong} items={store.items} />
             <Items items={store.items} />
             <Guests store={store} filled={view === "intro" || view === "plan" || view === "scenario" ? 0 : filled} />
             <FitControls box={[-w / 2, -d / 2, w / 2, d / 2 + 0.6]} dir={[0.7, 1.2, 1.6]} />

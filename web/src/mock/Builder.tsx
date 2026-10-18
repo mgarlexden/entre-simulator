@@ -7,7 +7,7 @@ import { Html } from "@react-three/drei";
 import { GLGuard } from "../shared/GLGuard";
 import Checks from "./Checks";
 import { Items, Piece, Room } from "./Parts3D";
-import { FitControls } from "./Scene3D";
+import { FitControls, StoreLights } from "./Scene3D";
 import {
   CATALOG, DEPOSIT_MONTHS, GRADES, ITEM, cashLeft, eul, fits, footprint, guStat, kitchenSpot, man, nextUid, openingCost, roomSize, snap,
   recommend, storeStats, type CatalogItem, type Grade, type Levers, type Placed, type Profile, type Store,
@@ -25,10 +25,8 @@ function Scene({ portal, store, tool, selected, ghost, onFloorMove, onFloorClick
   const sel = store.items.find((i) => i.uid === selected);
   return (
     <>
-      <ambientLight intensity={1.15} />
-      <directionalLight position={[-6, 12, 8]} intensity={1.7} castShadow shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-12} shadow-camera-right={12} shadow-camera-top={12} shadow-camera-bottom={-12} />
-      <Room w={w} d={d} grade={store.grade} />
+      <StoreLights w={w} d={d} r={Math.max(w, d) / 2 + 3} />
+      <Room w={w} d={d} grade={store.grade} pyeong={store.pyeong} items={store.items.filter((i) => !(tool?.kind === "move" && tool.uid === i.uid))} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} visible={false}
         onPointerMove={(e: ThreeEvent<PointerEvent>) => onFloorMove(e.point.x, e.point.z)}
         onClick={(e) => { if (e.delta < 5) onFloorClick(); }}>
