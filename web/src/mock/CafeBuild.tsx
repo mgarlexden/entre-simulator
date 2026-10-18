@@ -1,5 +1,6 @@
-// 카페의 3단계. 가게 꾸미기(3D 배치)는 비워 두고(건희가 마무리), 그 자리에 러프한 입력(평수, 등급, 직원)과 열기 전 점검을 둔다.
-import { useMemo } from "react";
+// 카페의 3단계. 고깃집 가게 꾸미기(Builder.tsx)와 같은 틀: 전체 폭 3D 무대(왼쪽 위 가게 크기·마감·직원, 오른쪽 위 현금), 아래 물건 쟁반, 그 아래 열기 전 점검.
+// 3D는 엔진(/cafe/preview)이 준 배치를 상자로만 그린 목업이고, 건희의 3D가 이 자리를 덮어쓴다. 물건은 고깃집처럼 놓는 게 아니라 개수로 정한다.
+import { useMemo, useState } from "react";
 import { Mark } from "./Checks";
 import { CAFE_GRADES, CAFE_PYEONG, cafeEstimate, cafeOpeningCost } from "./cafe";
 import { cafeChecks, cafeLayoutOf, type CafeCfg } from "./cafeChecks";
@@ -7,79 +8,121 @@ import CafeRoom3D from "./CafeRoom3D";
 import { useCafePreview } from "./useCafePreview";
 import { STATUS_LABEL, guStat, man, type Grade, type Profile } from "./model";
 
-function Step({ label, v, min, max, on }: { label: string; v: number; min: number; max: number; on: (v: number) => void }) {
-  return (
-    <div className="cs-step"><span>{label}</span>
-      <button type="button" aria-label={`${label} 줄이기`} disabled={v <= min} onClick={() => on(v - 1)}>−</button><b>{v}</b>
-      <button type="button" aria-label={`${label} 늘리기`} disabled={v >= max} onClick={() => on(v + 1)}>+</button></div>
-  );
-}
+type Layout = ReturnType<typeof cafeLayoutOf>;
+type Item = { key: keyof Layout; name: string; note: string; min: number; max: number };
+const CATS: { key: string; label: string; items: Item[] }[] = [
+  { key: "seat", label: "좌석", items: [
+    { key: "tables", name: "테이블", note: "2~4인용", min: 0, max: 40 },
+    { key: "chairs", name: "의자", note: "테이블에 붙는 자리", min: 0, max: 160 },
+    { key: "bar", name: "바 좌석", note: "카운터 앞 자리", min: 0, max: 30 },
+  ] },
+  { key: "machine", label: "카운터와 머신", items: [
+    { key: "groups", name: "에스프레소 머신 그룹", note: "그룹이 많을수록 동시에 뽑아요", min: 1, max: 4 },
+    { key: "kiosks", name: "키오스크", note: "주문 줄을 나눠 줘요", min: 0, max: 3 },
+    { key: "pos", name: "계산대(POS)", note: "", min: 1, max: 3 },
+  ] },
+  { key: "kitchen", label: "진열과 조리", items: [
+    { key: "showcase", name: "디저트 진열장", note: "디저트를 팔려면 필요해요", min: 0, max: 1 },
+    { key: "oven", name: "오븐", note: "구움 디저트용", min: 0, max: 1 },
+  ] },
+];
 
 export default function CafeBuild({ profile, cfg: cfgIn, setCfg: setCfgOut, onNext }: { profile: Profile; cfg: CafeCfg | null; setCfg: (c: CafeCfg) => void; onNext: () => void }) {
   const est = useMemo(() => cafeEstimate(profile, 3 * 550), [profile.gu, profile.capital, profile.keyMoney]); // eslint-disable-line react-hooks/exhaustive-deps
   const cfg: CafeCfg = cfgIn ?? { pyeong: est.pyeong, grade: est.grade, staff: 1 };
-  const setCfg = setCfgOut;
+  const [cat, setCat] = useState(CATS[0].key);
   const pv = useCafePreview(profile, cfg);
   const lay = cafeLayoutOf(cfg);
   const { list, settled } = useMemo(() => cafeChecks(profile, cfg), [profile, cfg]);
   const open = cafeOpeningCost(cfg.pyeong, cfg.grade, profile.gu, profile.keyMoney ?? 0);
   const st = guStat(profile.gu);
-  const set = (p: Partial<CafeCfg>) => setCfg({ ...cfg, ...p });
+  const left = profile.capital - open.total;
+  const set = (p: Partial<CafeCfg>) => setCfgOut({ ...cfg, ...p });
+  const seats = pv.data?.seats.total ?? 0;
   const headline = settled <= 0
     ? <>보통 카페 기준으로는 자리가 잡혀도 한 달에 <mark>{man(-settled)}씩 줄어요.</mark></>
     : <>보통 카페 기준으로 자리가 잡히면 한 달에 <mark>{man(settled)}</mark>이 남아요.</>;
 
-  return (
-    <main className="m-checks">
-      <section className="a-card" aria-label="가게 꾸미기">
-        <p className="m-eyebrow">가게 꾸미기</p>
-        <h1>가게 구조 미리보기</h1>
-        <p className="m-sub">상자로만 그린 구조 목업이에요. 숫자를 바꾸면 엔진이 배치를 다시 계산해요. 실제 3D 꾸미기는 곧 이 위에 덮여 들어와요.</p>
-        {pv.err && <p className="se-err" role="alert">{pv.err}</p>}
-        {pv.data && <CafeRoom3D room={pv.data.room} layout={pv.data.layout} roster={pv.data.staff.roster} />}
-        {pv.data && (
-          <>
-            <p className="cs-legend"><i style={{ background: "#b98a5e" }} />테이블 <i style={{ background: "#7a8da6" }} />의자 <i style={{ background: "#2b2d30" }} />머신 <i style={{ background: "#256abf" }} />키오스크 <i style={{ background: "#cfe3ee" }} />진열장 <i style={{ background: "#d64545" }} />안 들어간 것 <i style={{ background: "#35614a" }} />바리스타 <i style={{ background: "#d4a032" }} />계산 <i style={{ background: "#43648a" }} />홀 직원</p>
-            <ul className="cs-hint">
-              <li>좌석 {pv.data.seats.total}석 (테이블석 {pv.data.seats.table}, 바 {pv.data.seats.bar}), 공간 {Math.round(pv.data.space.use_pct)}% 사용</li>
-              <li>먼저 막히는 곳: <b>{pv.data.bottleneck[0].label_ko}</b>. {pv.data.bottleneck[0].note_ko}</li>
-              {pv.data.space.overflow.length > 0 && <li className="is-neg">공간이 모자라요: {pv.data.space.overflow.map((o) => `${o.type} ${o.count}개`).join(", ")}. {pv.data.space.fix[0]?.label_ko}</li>}
-              {pv.data.suggestion.label_ko && <li>제안: {pv.data.suggestion.label_ko} ({pv.data.suggestion.effect_ko})</li>}
-            </ul>
-          </>
-        )}
-        <div className="m-levers">
-          <label>평수 <b>{cfg.pyeong}평</b>
-            <input type="range" min={10} max={30} value={cfg.pyeong} onChange={(e) => set({ pyeong: Number(e.target.value), tables: undefined, chairs: undefined })} aria-valuetext={`${cfg.pyeong}평`} />
-            <small>독립 카페 면적은 4분의 1이 {CAFE_PYEONG.low}평 이하, 절반이 {CAFE_PYEONG.mid}평, 4분의 1이 {CAFE_PYEONG.high}평 이상이에요.</small>
-          </label>
-          <div className="cs-steps">
-            <Step label="테이블" v={lay.tables} min={0} max={40} on={(v) => set({ tables: v })} />
-            <Step label="의자" v={lay.chairs} min={0} max={160} on={(v) => set({ chairs: v })} />
-            <Step label="바 좌석" v={lay.bar} min={0} max={30} on={(v) => set({ bar: v })} />
-            <Step label="머신 그룹" v={lay.groups} min={1} max={4} on={(v) => set({ groups: v })} />
-            <Step label="키오스크" v={lay.kiosks} min={0} max={3} on={(v) => set({ kiosks: v })} />
-            <Step label="POS" v={lay.pos} min={1} max={3} on={(v) => set({ pos: v })} />
-            <Step label="진열장" v={lay.showcase} min={0} max={1} on={(v) => set({ showcase: v })} />
-            <Step label="오븐" v={lay.oven} min={0} max={1} on={(v) => set({ oven: v })} />
-          </div>
-          <fieldset><legend>인테리어와 설비 수준 (비용 계산용)</legend>
-            {(Object.keys(CAFE_GRADES) as Grade[]).map((g) => (
-              <label key={g} className="m-choice"><input type="radio" name="cgrade" checked={cfg.grade === g} onChange={() => set({ grade: g })} />
-                <span>{CAFE_GRADES[g].label}<small>인테리어 평당 {CAFE_GRADES[g].interior}만원 · 머신과 설비 평당 {CAFE_GRADES[g].kitchen}만원</small></span></label>
-            ))}
-          </fieldset>
-          <label>직원 (사장 외) <b>{cfg.staff}명</b>
-            <input type="range" min={0} max={3} value={cfg.staff} onChange={(e) => set({ staff: Number(e.target.value) })} aria-valuetext={`${cfg.staff}명`} />
-            <small>독립 카페는 대표 포함 평균 2~3명이 일해요 (경영실태조사). 직원 한 명은 월 {man(158)}으로 계산해요.</small>
-          </label>
-        </div>
-      </section>
+  const d = pv.data;
+  const msg = pv.err ? pv.err
+    : !d ? "엔진에서 배치를 받아 오는 중이에요."
+    : d.space.overflow.length > 0 ? `공간이 모자라요: ${d.space.overflow.map((o) => `${o.type} ${o.count}개`).join(", ")}. ${d.space.fix[0]?.label_ko ?? ""}`
+    : `먼저 막히는 곳은 ${d.bottleneck[0].label_ko}이에요. ${d.suggestion.label_ko ? `제안: ${d.suggestion.label_ko} (${d.suggestion.effect_ko})` : ""}`;
 
-      <section className="m-checks-body" aria-labelledby="checks-h">
+  return (
+    <main className="m-build">
+      <div className="m-stage">
+        <div className="m-canvas">
+          {d ? <CafeRoom3D room={d.room} layout={d.layout} roster={d.staff.roster} height="fill" /> : <p className="m-loading">엔진을 부르는 중이에요</p>}
+        </div>
+
+        <div className="m-room">
+          <div className="m-stepper">
+            <span id="py">가게 크기</span>
+            <button type="button" aria-label="1평 줄이기" disabled={cfg.pyeong <= 10} onClick={() => set({ pyeong: cfg.pyeong - 1, tables: undefined, chairs: undefined })}>−</button>
+            <output aria-labelledby="py">{cfg.pyeong}평</output>
+            <button type="button" aria-label="1평 늘리기" disabled={cfg.pyeong >= 30} onClick={() => set({ pyeong: cfg.pyeong + 1, tables: undefined, chairs: undefined })}>+</button>
+          </div>
+          <div className="m-seg" role="group" aria-label="마감 수준">
+            {(Object.keys(CAFE_GRADES) as Grade[]).map((g) => (
+              <button type="button" key={g} aria-pressed={cfg.grade === g} onClick={() => set({ grade: g })}>{CAFE_GRADES[g].label}</button>
+            ))}
+          </div>
+          <div className="m-stepper">
+            <span id="st">직원 수</span>
+            <button type="button" aria-label="직원 1명 줄이기" disabled={cfg.staff <= 0} onClick={() => set({ staff: cfg.staff - 1 })}>−</button>
+            <output aria-labelledby="st">{cfg.staff}명</output>
+            <button type="button" aria-label="직원 1명 늘리기" disabled={cfg.staff >= 3} onClick={() => set({ staff: cfg.staff + 1 })}>+</button>
+          </div>
+          <p>테이블 {lay.tables}개, {seats}석</p>
+          <button type="button" className="m-btn m-btn-quiet m-recbtn"
+            onClick={() => setCfgOut({ pyeong: est.pyeong, grade: est.grade, staff: 1 })}>추천 배치</button>
+        </div>
+
+        <div className={`m-cash ${left < 0 ? "is-short" : ""}`}>
+          <p><span>{left < 0 ? "모자란 현금" : "현금"}</span><strong>{man(Math.abs(left))}</strong></p>
+          <small>가진 돈 {man(profile.capital)} 중 {man(open.total)}을 썼어요.</small>
+          {left < 0 && <p className="m-warn">가진 돈보다 여는 비용이 커요. 시뮬레이션에서는 모자란 만큼을 대출로 계산해요. 평수나 마감을 낮추면 줄어요.</p>}
+        </div>
+
+        <p className="m-msg" role="status">{msg}</p>
+      </div>
+
+      <div className="m-tray">
+        <dl className="m-spent">
+          {open.lines.filter((l) => l.amount > 0).map((l) => <div key={l.key}><dt>{l.label}</dt><dd>{man(l.amount)}</dd></div>)}
+        </dl>
+        <div className="m-cats" role="tablist" aria-label="물건 종류">
+          {CATS.map((c) => <button type="button" role="tab" key={c.key} aria-selected={cat === c.key} onClick={() => setCat(c.key)}>{c.label}</button>)}
+        </div>
+        <ul className="m-catalog">
+          {CATS.find((c) => c.key === cat)!.items.map((it) => {
+            const v = lay[it.key] as number;
+            return (
+              <li key={it.key}>
+                <div className="cs-card">
+                  <span>{it.name}</span>
+                  <small>{it.note || " "}</small>
+                  <div className="m-stepper">
+                    <button type="button" aria-label={`${it.name} 줄이기`} disabled={v <= it.min} onClick={() => set({ [it.key]: v - 1 } as Partial<CafeCfg>)}>−</button>
+                    <output>{v}</output>
+                    <button type="button" aria-label={`${it.name} 늘리기`} disabled={v >= it.max} onClick={() => set({ [it.key]: v + 1 } as Partial<CafeCfg>)}>+</button>
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="m-tray-go">
+          <button type="button" className="m-btn m-btn-outline" onClick={() => document.querySelector(".m-checks")?.scrollIntoView({ behavior: "smooth", block: "start" })}>오픈 전 점검 보러가기</button>
+          <button type="button" className="m-btn" disabled={seats === 0} onClick={onNext}>시뮬레이션 하러 가기</button>
+        </div>
+      </div>
+
+      <section className="m-checks" aria-labelledby="checks-h">
         <p className="m-eyebrow" id="checks-h">열기 전 점검</p>
         <h1>{headline}</h1>
-        <p className="m-sub">{profile.gu}, {cfg.pyeong}평, 직원 {cfg.staff}명 기준이에요. 여는 데 {man(open.total)}이 들어요(보증금 {man(open.lines.find((l) => l.key === "deposit")?.amount ?? 0)} 포함). 바꾸면 바로 다시 계산해요.</p>
+        <p className="m-sub">{profile.gu}, {cfg.pyeong}평, {seats}석, 직원 {cfg.staff}명 기준이에요. 여는 데 {man(open.total)}이 들어요(보증금 {man(open.lines.find((l) => l.key === "deposit")?.amount ?? 0)} 포함). 바꾸면 바로 다시 계산해요.</p>
         <ul className="m-checklist">
           {list.map((c) => (
             <li key={c.key}>
@@ -101,8 +144,8 @@ export default function CafeBuild({ profile, cfg: cfgIn, setCfg: setCfgOut, onNe
         <p className="m-aside">
           비용 구조(식재료 39.1%, 세금·공과 6.0%, 기타 5.8%, 객단가 5,704원, 임시직 월 158만원, 대표자 월 211만원)는 외식업체 경영실태조사 2025의 커피전문점 전국 평균이에요.
           프랜차이즈가 섞여 있어서 독립 카페와 다를 수 있어요. 매출은 {profile.gu}의 보통 카페(중앙값) {man(st.sales)}이고, 사장 생활비를 비용으로 뺐어요.
+          평수 {CAFE_PYEONG.low}~{CAFE_PYEONG.high}평은 독립 카페 면적의 중간 절반 범위예요.
         </p>
-        <button type="button" className="m-btn" onClick={onNext}>시뮬레이션 하러 가기</button>
       </section>
     </main>
   );

@@ -49,3 +49,11 @@
 .cs-step button { inline-size: 28px; block-size: 28px; border: 1px solid #c3d0e2; border-radius: 8px; background: #fff; cursor: pointer; font-size: 16px; }
 .cs-step button:disabled { opacity: .4; cursor: default; }
 .cs-h { cursor: pointer; } .cs-h.is-on span { font-weight: 700; color: #14233a; } .cs-h.is-on i { outline: 2px solid #14233a; }
+
+/* 가게 꾸미기: 물건 쟁반의 카드 (고깃집 .m-catalog 버튼과 같은 모양, 안에 개수 −/+) */
+.m-catalog .cs-card { display: grid; justify-items: start; gap: 4px; inline-size: 190px; block-size: 100%; padding: 10px 14px 12px; border: 1px solid #edf0f4; border-radius: 16px; background: var(--bg); box-shadow: 0 1px 8px rgba(25, 31, 40, 0.06); align-content: space-between; }
+.m-catalog .cs-card > span { font-weight: 600; font-size: 16px; }
+.m-catalog .cs-card > small { font-size: 13px; color: var(--ink2); }
+.m-catalog .cs-card .m-stepper { inline-size: 100%; margin-block-start: 6px; }
+.m-catalog .cs-card .m-stepper button { inline-size: 36px; block-size: 36px; padding: 0; border: 0; border-radius: 10px; box-shadow: none; display: block; }
+.m-catalog .cs-card .m-stepper output { min-inline-size: 2em; flex: 1; }

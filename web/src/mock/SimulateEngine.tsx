@@ -207,16 +207,16 @@ function Guests({ store, filled }: { store: Store; filled: number }) {
 }
 
 const ico = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
-const IconCash = () => <svg {...ico}><rect x="2.5" y="6" width="19" height="12" rx="1.5" /><circle cx="12" cy="12" r="2.8" /><path d="M6 9.5v.01M18 14.5v.01" /></svg>;
-const IconCal = () => <svg {...ico}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
-const IconStar = () => <svg {...ico}><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" /></svg>;
-const IconHeart = () => <svg {...ico}><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10C19.5 15.4 12 20 12 20z" /></svg>;
-const IconBattery = ({ level }: { level: number }) => (
+export const IconCash = () => <svg {...ico}><rect x="2.5" y="6" width="19" height="12" rx="1.5" /><circle cx="12" cy="12" r="2.8" /><path d="M6 9.5v.01M18 14.5v.01" /></svg>;
+export const IconCal = () => <svg {...ico}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
+export const IconStar = () => <svg {...ico}><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" /></svg>;
+export const IconHeart = () => <svg {...ico}><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10C19.5 15.4 12 20 12 20z" /></svg>;
+export const IconBattery = ({ level }: { level: number }) => (
   <svg {...ico}><rect x="2.5" y="7.5" width="16" height="9" rx="2" /><path d="M21 10.5v3" /><rect x="4.5" y="9.5" width={Math.max(0.5, 12 * (1 - level / 100))} height="5" rx="0.8" fill="currentColor" stroke="none" /></svg>
 );
 
 // ? 아이콘. 누르거나 올리면 설명 상자가 뜬다. 설명을 빼면 아이콘만 보인다.
-function Q({ children }: { children?: ReactNode }) {
+export function Q({ children }: { children?: ReactNode }) {
   return (
     <span className="sx-q" tabIndex={0} aria-label="설명 보기">
       ?
@@ -225,7 +225,7 @@ function Q({ children }: { children?: ReactNode }) {
   );
 }
 
-function Metric({ icon, label, children, tip }:{ icon: ReactNode; label: string; children: ReactNode; tip: ReactNode }) {
+export function Metric({ icon, label, children, tip }:{ icon: ReactNode; label: string; children: ReactNode; tip: ReactNode }) {
   return (
     <div className="sx-metric" tabIndex={0}>
       <span className="sx-ico">{icon}</span>
