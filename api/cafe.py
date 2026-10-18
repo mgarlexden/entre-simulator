@@ -52,6 +52,7 @@ class MonthIn(BaseModel):
     staff_policy: Literal["lean", "standard", "generous"] | None = None
     marketing_krw: int | None = Field(None, ge=0, le=5_000_000)
     dessert: bool | None = None
+    scenario: dict[str, str] | None = None        # {decision point id: option id}; missing ones take the default
     month_index: int | None = Field(None, ge=0)   # optional: 0-based month this request is for (= months played); a
                                                   # repeat of a played month with the same decisions returns it again
 
@@ -147,6 +148,8 @@ def _advance(state: dict, sent: dict, i: int | None) -> tuple[dict, dict]:
         _, month = cafe_season.play_month(run, sent)
     except cafe_season.SeasonOver as e:
         raise HTTPException(409, {"error": "season_over", "detail": str(e), "months_played": played})
+    except ValueError as e:
+        raise HTTPException(400, {"error": "bad_decision", "detail": str(e)})
     return {**state, "d": state["d"] + [sent]}, month
 
 
@@ -173,6 +176,16 @@ def cafe_season_month_token(body: TokenMonthIn):
     state = decode_token(body.state_token)
     state, month = _advance(state, *_sent(body))
     return {**month, "state_token": encode_token(state)}
+
+
+@router.post("/season/scenario")
+def cafe_season_scenario(body: TokenMonthIn):
+    state = decode_token(body.state_token)
+    sent, _ = _sent(body)
+    try:
+        return cafe_season.scenario_preview(_replay(state), sent)
+    except cafe_season.SeasonOver as e:
+        raise HTTPException(409, {"error": "season_over", "detail": str(e)})
 
 
 @router.post("/season/report")

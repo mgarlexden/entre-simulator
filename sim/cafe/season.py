@@ -20,10 +20,10 @@ DECISION_KEYS = ("price_change_pct", "hours", "staff_policy", "marketing_krw", "
 # waterfall: factors are switched from the reference month to this month one at a time, in this order
 STEPS = (("season", "계절"), ("reputation", "별점과 단골"), ("price", "가격"), ("hours", "영업시간"),
          ("staff", "직원 운영"), ("marketing", "마케팅"), ("dessert", "디저트"), ("rival", "경쟁 카페"),
-         ("viral", "SNS 화제"), ("breakdown", "설비 고장"), ("rent", "임대료 인상"))
+         ("viral", "SNS 화제"), ("breakdown", "설비 고장"), ("rent", "임대료 인상"), ("scn", "이번 달 대응"))
 STEP_FACTORS = {"season": ("season",), "reputation": ("rating", "maturity"), "price": ("price_level",),
                 "hours": ("hours",), "staff": ("staff",), "marketing": ("marketing_krw",), "dessert": ("dessert",),
-                "rival": ("rival",), "viral": ("viral",), "breakdown": ("breakdown",), "rent": ("rent_mult",)}
+                "rival": ("rival",), "viral": ("viral",), "breakdown": ("breakdown",), "rent": ("rent_mult",), "scn": ("scn",)}
 DAYS = m.DAYS_PER_MONTH_DATA
 
 
@@ -121,6 +121,36 @@ def _labor(ctx: dict, f: dict, day_rows: dict) -> tuple[float, int]:
     return round(paid, 1), round(paid * m._hourly_cost())   # owner_hours_per_day can be fractional (9.3)
 
 
+def scenario_points() -> list[dict]:
+    return s("scenario_points")
+
+
+def default_scenario() -> dict:
+    return {p["id"]: p["default"] for p in scenario_points()}
+
+
+def clean_scenario(chosen: dict | None) -> dict:
+    """Chosen option per decision point; missing ones take the default, unknown ids are an error."""
+    out = default_scenario()
+    for pid, oid in (chosen or {}).items():
+        pt = next((p for p in scenario_points() if p["id"] == pid), None)
+        if pt is None or oid not in {o["id"] for o in pt["options"]}:
+            raise ValueError(f"unknown scenario choice {pid}={oid}")
+        out[pid] = oid
+    return out
+
+
+def _scn_effects(scn: dict) -> dict:
+    eff = {"walk_recover": 0.0, "demand_mult": 1.0, "ticket_mult": 1.0, "cost_krw": 0}
+    for p in scenario_points():
+        o = next(x for x in p["options"] if x["id"] == (scn or {}).get(p["id"], p["default"]))
+        eff["walk_recover"] += o.get("walk_recover", 0.0)
+        eff["demand_mult"] *= o.get("demand_mult", 1.0)
+        eff["ticket_mult"] *= o.get("ticket_mult", 1.0)
+        eff["cost_krw"] += o.get("cost_krw", 0)
+    return eff
+
+
 def evaluate(ctx: dict, f: dict) -> dict:
     """One month's outcome for the factor set f (season, reputation, decisions, events). No state change."""
     cfg = ctx["cfg"]
@@ -132,8 +162,9 @@ def evaluate(ctx: dict, f: dict) -> dict:
         "rating": 1 + s("rating_demand_per_star") * (f["rating"] - s("rating_start")),
         "price": f["price_level"] ** (-eps), "marketing": 1 + lift,
         "rival": s("rival_demand_mult") if f["rival"] else 1.0, "viral": f["viral"],
-        "hours": _coverage(cfg["district"], hours),
+        "hours": _coverage(cfg["district"], hours), "scn": _scn_effects(f.get("scn"))["demand_mult"],
     }
+    scn = _scn_effects(f.get("scn"))
     avg_day = ctx["avg_day"] * math.prod(mult.values())
     open_share = 1 - (s("breakdown_down_days") / DAYS if f["breakdown"] else 0)
     demand = served = 0.0
@@ -149,11 +180,12 @@ def evaluate(ctx: dict, f: dict) -> dict:
             binding, peak = key, pk
     demand *= open_share
     served *= open_share
+    served += (demand - served) * min(1.0, scn["walk_recover"])
 
     ds = s("dessert_share")
     ds_eff = ds * (1 if cfg["showcase"] else s("dessert_no_showcase_factor")) if f["dessert"] else 0.0
     drink_ticket = ctx["ticket"] * (1 - ds)
-    ticket = drink_ticket / (1 - ds_eff) * f["price_level"]
+    ticket = drink_ticket / (1 - ds_eff) * f["price_level"] * scn["ticket_mult"]
     revenue = served * ticket
     dessert_rev = revenue * ds_eff
     drink_food = (v("opex", "food_cost_share") - ds * s("dessert_food_cost_share")) / (1 - ds)
@@ -179,6 +211,7 @@ def evaluate(ctx: dict, f: dict) -> dict:
         ("labor", "인건비", labor, "L", f"유급 {paid_h}시간, 사장님 하루 {o('owner_hours_per_day')}시간 무급"),
         ("utilities", "전기 관리비 수도 통신", elec + ctx["maint"] + ctx["water_gas"] + ctx["misc"], "가정",
          "전기는 영업시간에 비례"),
+        ("scenario", "이번 달 대응 비용", scn["cost_krw"], "가정", "고른 대응에 드는 돈"),
         ("repair", "설비 수리", s("breakdown_repair_krw") if f["breakdown"] else 0, "가정", "고장 난 달만"),
     ]
     cost = [{"key": k, "item_ko": n, "krw": round(x), "grade": gr, "note_ko": note} for k, n, x, gr, note in lines]
@@ -227,7 +260,7 @@ def baseline_factors(decisions: dict) -> dict:
     """A mature month at the opening rating, the opening decisions, no season swing, no event."""
     return {"season": 1.0, "rating": s("rating_start"), "maturity": 1.0, "price_level": 1.0,
             "hours": decisions["hours"], "staff": decisions["staff_policy"], "marketing_krw": decisions["marketing_krw"],
-            "dessert": decisions["dessert"], "rival": False, "viral": 1.0, "breakdown": False, "rent_mult": 1.0}
+            "dessert": decisions["dessert"], "rival": False, "viral": 1.0, "breakdown": False, "rent_mult": 1.0, "scn": {}}
 
 
 def _loan(principal: int) -> dict:
@@ -376,6 +409,7 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
     ctx = _context(run["cfg"])
     i = len(run["months"])
     dec = apply_decisions(st["decisions"], body or {})
+    scn = clean_scenario((body or {}).get("scenario"))
     lo, hi = s("price_level_range")
     st["price_level"] = _clamp(st["price_level"] * (1 + dec["price_change_pct"] / 100), lo, hi)
     lift_ratio = 1 - math.exp(-dec["marketing_krw"] / s("marketing_half_krw"))
@@ -389,7 +423,8 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
     f = {"season": s("seasonality_by_quarter")[(cal - 1) // 3 + 1], "rating": st["rating"],
          "maturity": _maturity(st["regulars_idx"]), "price_level": st["price_level"], "hours": dec["hours"],
          "staff": dec["staff_policy"], "marketing_krw": dec["marketing_krw"], "dessert": dec["dessert"],
-         "rival": st["rival"], "viral": viral, "breakdown": "breakdown" in keys, "rent_mult": st["rent_mult"]}
+         "rival": st["rival"], "viral": viral, "breakdown": "breakdown" in keys, "rent_mult": st["rent_mult"],
+         "scn": scn}
     e = evaluate(ctx, f)
 
     # cash: OP + depreciation (non-cash) - loan interest and principal + VAT refund
@@ -425,7 +460,10 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
         "month": i + 1, "calendar_month": cal, "months_total": run["months_total"],
         "status": "closed" if st["closed"] else ("finished" if i + 1 == run["months_total"] else "open"),
         "decisions": {**dec, "price_level": round(st["price_level"], 4),
-                      "open_hour": s("hours")[dec["hours"]][0], "close_hour": s("hours")[dec["hours"]][1]},
+                      "open_hour": s("hours")[dec["hours"]][0], "close_hour": s("hours")[dec["hours"]][1],
+                      "scenario": scn},
+        "scenario_ko": [{"title": p["title"], "choice": o["label"]} for p in scenario_points() for o in p["options"]
+                        if o["id"] == scn[p["id"]]],
         "kpi": {"revenue_krw": e["revenue_krw"], "op_krw": e["op_krw"],
                 "op_margin": round(e["op_krw"] / e["revenue_krw"], 3) if e["revenue_krw"] else 0.0,
                 "cash_krw": st["cash"], "customers": e["customers"], "walkaways": e["walkaways"],
@@ -463,6 +501,24 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
     run["months"].append({**month, "_vs_baseline": vs_base})
     run["factors"].append(f)
     return run, month
+
+
+def scenario_preview(run: dict, body: dict | None = None) -> dict:
+    """Before the month is played: this month's events (they do not depend on the scenario choices) and the decision
+    points with their options, for the screen that asks the owner how to respond. Changes nothing."""
+    st = run["state"]
+    if st["closed"] or len(run["months"]) >= run["months_total"]:
+        raise SeasonOver("season is over (closed or all months played)")
+    ctx = _context(run["cfg"])
+    dec = apply_decisions(st["decisions"], body or {})
+    lift_ratio = 1 - math.exp(-dec["marketing_krw"] / s("marketing_half_krw"))
+    events = _events(run, ctx, len(run["months"]), lift_ratio)
+    pts = [{"id": p["id"], "clock": p["clock"], "title": p["title"], "prompt": p["prompt"], "count": p["count"],
+            "default": p["default"],
+            "options": [{k: o[k] for k in ("id", "label", "hint", "downside")} for o in p["options"]]}
+           for p in scenario_points()]
+    return {"month": len(run["months"]) + 1, "events": events, "points": pts, "grade": "가정",
+            "note_ko": "대응이 그달 계산에 미치는 크기는 모두 가정값"}
 
 
 def replay(body: dict, decisions: list[dict]) -> dict:
