@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>입지 — 마포구 고깃집</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFFFF}
+a{color:#3639B8}a:hover{color:#26288A}
+select:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid #9EA2F0;outline-offset:2px}
+</style>
+</helmet>
+<div style="box-sizing: border-box; width: 100%; max-width: 1240px; margin: 0 auto; padding: 40px 24px 72px; display: flex; flex-direction: column; gap: 28px; font-family: 'Noto Sans KR', sans-serif; color: #17181C;">
+
+<header style="display: flex; flex-direction: column; gap: 10px;">
+<span style="font-size: 14px; font-weight: 500; color: #3639B8;">2단계 · 입지 · 고깃집</span>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;">
+<h1 style="margin: 0; font-size: 32px; font-weight: 700;">마포구</h1>
+<select aria-label="보고 있는 동네" value="{{selected}}" onChange="{{onSelect}}" style="height: 52px; min-width: 200px; padding: 0 44px 0 18px; border: 2px solid #3639B8; border-radius: 999px; background: #EEF0FF; font-family: inherit; font-size: 20px; font-weight: 700; color: #26288A; cursor: pointer;">
+<sc-for list="{{options}}" as="o" hint-placeholder-count="5">
+<option value="{{o.id}}">{{o.label}}</option>
+</sc-for>
+</select>
+<sc-if value="{{notAvg}}" hint-placeholder-val="{{false}}">
+<button type="button" onClick="{{backToGu}}" style="min-height: 44px; padding: 0 16px; border: 1px solid #C9CBD6; border-radius: 999px; background: #FFFFFF; font-family: inherit; font-size: 15px; color: #4A4D5A; cursor: pointer;">마포구 전체로 돌아가기</button>
+</sc-if>
+</div>
+<span style="font-size: 15px; color: #5A5D6B;">제목 옆에서 동네를 바꾸거나, 오른쪽 추천·지도에서 골라도 돼요</span>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 28px;">
+
+<main style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 20px;">
+
+<section aria-labelledby="sum-title" style="background: #F1F3FC; border-radius: 24px; padding: 26px 28px; display: flex; flex-direction: column; gap: 18px;">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;">
+<h2 id="sum-title" style="margin: 0; font-size: 22px; font-weight: 700;">{{scopeName}} 한눈에 보기</h2>
+<span style="font-size: 14px; color: #5A5D6B;">태그를 누르면 바로 아래 지표로 연결돼요</span>
+</div>
+<sc-for list="{{summary}}" as="grp" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 10px;">
+<h3 style="margin: 0; font-size: 14px; font-weight: 700; color: {{grp.color}};">{{grp.title}}</h3>
+<sc-for list="{{grp.lines}}" as="ln" hint-placeholder-count="2">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;">
+<button type="button" onClick="{{ln.go}}" style="flex: 0 0 auto; min-width: 104px; min-height: 40px; padding: 0 16px; border-radius: 999px; border: 2px solid {{ln.ring}}; background: {{ln.bg}}; color: {{ln.fg}}; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer;">{{ln.tag}}</button>
+<span style="flex: 1 1 320px; min-width: 0; font-size: 16px; line-height: 1.5; color: #2A2C34;">{{ln.text}}</span>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</section>
+
+<div role="tablist" aria-label="{{scopeName}} 지표" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px;">
+<sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+<button type="button" role="tab" aria-selected="{{k.ariaSel}}" onClick="{{k.go}}" style="text-align: left; cursor: pointer; font-family: inherit; background: #FFFFFF; border: 2px solid {{k.border}}; border-radius: 20px; padding: 18px 18px; display: flex; flex-direction: column; gap: 8px; min-height: 168px;">
+<span style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px;">
+<span style="font-size: 15px; font-weight: 700; color: #3639B8;">{{k.name}}</span>
+<span style="font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: {{k.tagBg}}; color: {{k.tagFg}};">{{k.tag}}</span>
+</span>
+<span style="font-size: 30px; font-weight: 700; letter-spacing: -0.5px; color: #17181C;">{{k.value}}</span>
+<span style="font-size: 14px; font-weight: 500; color: {{k.subColor}};">{{k.sub}}</span>
+<span style="font-size: 13px; color: #5A5D6B;">{{k.basis}}</span>
+</button>
+</sc-for>
+</div>
+
+<div role="tabpanel" style="border: 1px solid #DDDFE7; border-radius: 20px; padding: 6px 24px 18px; display: flex; flex-direction: column;">
+<div style="padding: 16px 0 8px; font-size: 15px; font-weight: 700; color: #3639B8;">{{panelTitle}}</div>
+<sc-for list="{{details}}" as="d" hint-placeholder-count="2">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 16px 0; border-top: 1px solid #EEEFF4;">
+<div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+<span style="font-size: 17px; font-weight: 700;">{{d.title}}</span>
+<span style="font-size: 14px; color: #5A5D6B; line-height: 1.5;">{{d.sub}}</span>
+</div>
+<span style="font-size: 12px; font-weight: 500; color: #4A4D5A; background: #F1F2F6; border-radius: 999px; padding: 4px 10px;">{{d.scope}}</span>
+<span style="flex: 0 0 auto; min-width: 96px; text-align: right; font-size: 22px; font-weight: 700;">{{d.value}}</span>
+</div>
+</sc-for>
+<sc-if value="{{isCost}}" hint-placeholder-val="{{false}}">
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 16px 0 4px; border-top: 1px solid #EEEFF4;">
+<label for="rent" style="font-size: 17px; font-weight: 700;">찾아 둔 매물이 있다면 평당 월세를 넣어 보세요 <span style="font-weight: 400; color: #5A5D6B;">(선택)</span></label>
+<div style="display: flex; align-items: center; gap: 12px;">
+<input id="rent" type="number" step="0.1" value="{{rent}}" onChange="{{onRent}}" style="width: 160px; height: 48px; box-sizing: border-box; padding: 0 16px; border: 1px solid #C9CBD6; border-radius: 12px; font-family: inherit; font-size: 18px;">
+<span style="font-size: 16px;">만원/평·월</span>
+</div>
+<span style="font-size: 14px; color: #5A5D6B; line-height: 1.5;">보증금을 뺀, 매달 내는 현금 월세예요. 비워 두면 구 평균 17.1만원으로 계산해요.</span>
+</div>
+</sc-if>
+</div>
+<p style="margin: 0; font-size: 13px; color: #5A5D6B; line-height: 1.6;">지표는 지역 평균 기준이에요. 실제 매장 상황에 따라 달라질 수 있어요. 월세는 한국부동산원 2026년 2분기 소규모 상가 1층 임대료를 구 안 상권 4곳으로 평균 내고, 보증금 환산분(12개월)을 뺀 현금 월세예요.</p>
+</main>
+
+<aside aria-labelledby="rec-title" style="flex: 1 1 300px; max-width: 100%; box-sizing: border-box; position: sticky; top: 24px; display: flex; flex-direction: column; gap: 14px; background: #FFFFFF; border: 2px solid #3639B8; border-radius: 24px; padding: 22px 20px; box-shadow: 0 10px 28px rgba(54, 57, 184, 0.14);">
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<span style="align-self: flex-start; display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #FFFFFF; background: #3639B8; border-radius: 999px; padding: 4px 12px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6-4.5-4.2 6.1-.7z"></path></svg>추천 동네</span>
+<h2 id="rec-title" style="margin: 0; font-size: 22px; font-weight: 700; color: #17181C;">이런 동네는 어때요?</h2>
+<span style="font-size: 14px; color: #4A4D5A; line-height: 1.5;">마포구 안에서 고깃집 열기 좋은 동네를 골라 봤어요. 누르면 왼쪽 지표가 그 동네로 바뀌어요.</span>
+</div>
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="2">
+<div style="background: #EEF0FF; border-radius: 18px; padding: 16px; display: flex; flex-direction: column; gap: 8px;">
+<h3 style="margin: 0 0 2px; font-size: 15px; font-weight: 700; color: #26288A;">{{g.title}}</h3>
+<sc-for list="{{g.items}}" as="item" hint-placeholder-count="3">
+<button type="button" onClick="{{item.pick}}" aria-pressed="{{item.pressed}}" style="text-align: left; cursor: pointer; font-family: inherit; display: flex; flex-direction: column; gap: 3px; padding: 10px 14px; border-radius: 14px; border: 2px solid {{item.border}}; background: {{item.bg}}; min-height: 44px;">
+<span style="display: flex; align-items: center; gap: 8px;">
+<span style="font-size: 16px; font-weight: 700; color: #3639B8;">{{item.name}}</span>
+<sc-if value="{{item.selected}}" hint-placeholder-val="{{false}}">
+<span style="font-size: 12px; font-weight: 700; color: #FFFFFF; background: #3639B8; border-radius: 999px; padding: 2px 8px;">보는 중</span>
+</sc-if>
+<svg style="margin-left: auto;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3639B8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+</span>
+<span style="font-size: 13px; color: #5A5D6B;">[구 평균 대비 매출] · [성장률] · [경쟁]</span>
+</button>
+</sc-for>
+</div>
+</sc-for>
+</aside>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { selected: 'avg', tab: 'sales', rent: '' };
+  }
+  renderVals() {
+    var self = this;
+    var st = this.state;
+    var WARN = { bg: '#FBE9E7', fg: '#9A2B1C' };
+    var OK = { bg: '#E3F2E8', fg: '#1D5E35' };
+    var names = {
+      avg: '구 전체', ahyeon: '아현동', gongdeok: '공덕동', dohwa: '도화동', yonggang: '용강동',
+      daeheung: '대흥동', yeomni: '염리동', sinsu: '신수동', seogang: '서강동', seogyo: '서교동', hapjeong: '합정동',
+      mangwon1: '망원1동', mangwon2: '망원2동', yeonnam: '연남동', seongsan1: '성산1동', seongsan2: '성산2동', sangam: '상암동'
+    };
+    var order = ['avg','gongdeok','daeheung','dohwa','mangwon1','mangwon2','sangam','seogang','seogyo','seongsan1','seongsan2','sinsu','ahyeon','yeonnam','yeomni','yonggang','hapjeong'];
+    var sel = st.selected;
+    var isAvg = sel === 'avg';
+    var scopeName = isAvg ? '마포구' : names[sel];
+    function go(tab) { return function () { self.setState({ tab: tab }); }; }
+
+    function line(tag, tone, tab, text) {
+      var on = st.tab === tab;
+      return { tag: tag, text: text, bg: tone.bg, fg: tone.fg, ring: on ? tone.fg : 'transparent', go: go(tab) };
+    }
+    function t(gu) { return isAvg ? gu : '[' + names[sel] + '을 마포구 평균과 비교한 문장]'; }
+    var summary = [
+      { title: '주의할 점', color: '#9A2B1C', lines: [
+        line('성장 둔화', WARN, 'sales', t('고깃집 점포당 월매출이 2024년보다 4.1% 줄었어요. 25개 구 중 가장 많이 줄었어요.')),
+        line('경쟁 치열', WARN, 'comp', t('고깃집이 457곳으로 25개 구 중 3번째로 많아요.')),
+        line('월세 높음', WARN, 'cost', t('평당 월세 17.1만원으로 25개 구 중 8번째로 비싸요.')),
+        line('폐업 많음', WARN, 'survive', t('한식음식점 10곳 중 1.7곳이 1년 안에 문을 닫았어요 (2025년).'))
+      ]},
+      { title: '눈여겨볼 점', color: '#1D5E35', lines: [
+        line('평균 범위', OK, 'sales', t('눈에 띄게 좋은 점은 없지만, 매출 수준은 서울 평균 범위예요.'))
+      ]}
+    ];
+
+    var options = order.map(function (id) { return { id: id, label: names[id] }; });
+    function card(id) {
+      var on = sel === id;
+      return { name: names[id], selected: on, pressed: on ? 'true' : 'false',
+        border: on ? '#3639B8' : 'transparent', bg: on ? '#EEF0FF' : '#FFFFFF',
+        pick: function () { self.setState({ selected: id }); } };
+    }
+    var groups = [
+      { title: '규모는 작아도 성장하는 동네', items: ['mangwon2','seongsan1','yeomni'].map(card) },
+      { title: '매출이 크고 꺾이지 않은 동네', items: ['gongdeok','dohwa','sangam'].map(card) }
+    ];
+
+    function v(x) { return isAvg ? x : '[값]'; }
+    var kdefs = [
+      { id: 'sales', name: '매출', tag: '성장 둔화', tone: WARN, value: v('2,660만원'), sub: isAvg ? '▼ 4.1% 전년 대비' : '[전년 대비]', subColor: isAvg ? '#B3261E' : '#5A5D6B', basis: '고깃집 점포당 월매출' },
+      { id: 'comp', name: '경쟁', tag: '경쟁 치열', tone: WARN, value: v('457곳'), sub: isAvg ? '25개 구 중 3번째로 많음' : '[순위]', subColor: '#4A4D5A', basis: '고깃집 수' },
+      { id: 'cost', name: '비용', tag: '월세 높음', tone: WARN, value: v('17.1만원'), sub: isAvg ? '25개 구 중 8번째로 비쌈' : '[순위]', subColor: '#4A4D5A', basis: '평당 월세 (현금)' },
+      { id: 'survive', name: '생존', tag: '폐업 많음', tone: WARN, value: v('16.8%'), sub: '1년 폐업률', subColor: '#4A4D5A', basis: '한식음식점, 2025년' }
+    ];
+    var kpis = kdefs.map(function (k) {
+      var on = st.tab === k.id;
+      return { name: k.name, tag: k.tag, tagBg: k.tone.bg, tagFg: k.tone.fg, value: k.value, sub: k.sub, subColor: k.subColor, basis: k.basis,
+        ariaSel: on ? 'true' : 'false', border: on ? '#3639B8' : '#E3E5EC', go: go(k.id) };
+    });
+
+    var panels = {
+      sales: { title: '매출 · 근거', rows: [
+        { title: '하루 결제 건수', sub: '한 곳당 하루 평균, 1건은 보통 한 팀', scope: '한식음식점 · 구 전체', value: v('18.5건') },
+        { title: '매출 지수', sub: '서울 평균을 1로 놓았을 때', scope: '고깃집 · 구 전체', value: v('0.90') }
+      ]},
+      comp: { title: '경쟁 · 근거', rows: [
+        { title: '한식음식점 수', sub: '고깃집을 포함한 한식음식점 전체', scope: '한식음식점 · 구 안 상권', value: v('2,762곳') }
+      ]},
+      cost: { title: '비용 · 근거', rows: [
+        { title: '평당 월세 범위', sub: '구 안 상권 4곳 중 가장 싼 곳 ~ 가장 비싼 곳', scope: '소규모 상가 1층', value: v('12.8~19.6만원') }
+      ]},
+      survive: { title: '생존 · 근거', rows: [
+        { title: '가게 수 흐름', sub: '개업률에서 폐업률을 뺀 값, 0보다 작으면 가게가 줄어드는 중', scope: '한식음식점 · 구 전체', value: v('-0.2%p') }
+      ]}
+    };
+    var p = panels[st.tab];
+
+    return {
+      summary: summary,
+      selected: sel,
+      notAvg: !isAvg,
+      scopeName: scopeName,
+      options: options,
+      groups: groups,
+      kpis: kpis,
+      panelTitle: p.title,
+      details: p.rows,
+      isCost: st.tab === 'cost',
+      rent: st.rent,
+      onRent: function (e) { self.setState({ rent: e.target.value }); },
+      onSelect: function (e) { self.setState({ selected: e.target.value }); },
+      backToGu: function () { self.setState({ selected: 'avg' }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
