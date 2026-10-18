@@ -3,6 +3,7 @@
 // 이 파일의 값은 코드(model.ts, sim/store_input.py, research/*.yaml)에서 읽은 것을 옮겨 적은 것이라, 코드가 바뀌면 같이 고친다.
 
 import SourcesCash from "./SourcesCash";
+import Fold from "./Fold";
 
 type Via = "API 연동" | "파일 내려받기" | "건희 레포 파일" | "팀원 파일" | "직접 입력" | "우리가 정함" | "수빈 파일";
 const VIA_CLASS: Record<Via, string> = { "API 연동": "실측", "파일 내려받기": "실측", "건희 레포 파일": "차용", "팀원 파일": "차용", "수빈 파일": "차용", "직접 입력": "가정", "우리가 정함": "가정" };
@@ -158,7 +159,7 @@ export default function SourcesGogi() {
         <li><a href="#g-appendix">부록: 결정 기록, 보류한 데이터, API 키, 화면의 숫자 표, 팀 자료 대조, 구별 값</a></li>
       </ul>
 
-      <h2 id="g-all">1. 사용된 모든 데이터 출처</h2>
+      <Fold id="g-all" title="1. 사용된 모든 데이터 출처">
       <table>
         <thead><tr><th>출처</th><th>어떻게 가져왔나</th><th>방식</th><th>파일·스크립트</th><th>쓰는 탭</th><th>상태</th></tr></thead>
         <tbody>{ALL.map((s) => (
@@ -166,7 +167,9 @@ export default function SourcesGogi() {
         ))}</tbody>
       </table>
 
-      <h2 id="g-tabs">2. 탭별 데이터 출처</h2>
+      </Fold>
+
+      <Fold id="g-tabs" title="2. 탭별 데이터 출처">
       {TABS.map((t) => (
         <section key={t.title}>
           <h3>{t.title}</h3>
@@ -178,7 +181,9 @@ export default function SourcesGogi() {
         </section>
       ))}
 
-      <h2 id="g-sim">3. 시뮬레이션 변수 설정</h2>
+      </Fold>
+
+      <Fold id="g-sim" title="3. 시뮬레이션 변수 설정">
       <p>시뮬레이션은 <b>건희 엔진을 그대로</b> 쓰고, 내 가게 입력으로 덮어쓰는 값(A)과 매달 바꾸는 계획(B)만 우리 쪽에서 정합니다.
         사건과 밤 결정(C), 엔진 내부 값(D)은 건희 레포의 값입니다.</p>
       <p><b>유튜브 인터뷰는 시뮬레이션 변수에 들어가지 않았습니다.</b> 팀원 정성 자료(F3 유튜브 21건 + 알바 경험자 3곳, F4 인터뷰 요약 20건)는 자기보고 자료이고
@@ -197,7 +202,9 @@ export default function SourcesGogi() {
         </section>
       ))}
 
-      <h2 id="g-enough">4. 보강이 필요한 데이터: 카페만의 문제인가, 고깃집은 충분한가</h2>
+      </Fold>
+
+      <Fold id="g-enough" title="4. 보강이 필요한 데이터: 카페만의 문제인가, 고깃집은 충분한가">
       <p><b>카페만의 문제가 아니고, 고깃집도 분석은 쓸 만하지만 시뮬레이션 숫자는 아직 비교용입니다.</b> 건희 레포 최신 브랜치의 등급 정리 뒤에도
         고깃집 46개 행 중 24개가 L(가정)이고, 우리가 쓰는 엔진 내부 값도 105개 중 83개가 가정입니다. 카페 갭 106개와 같은 종류의 빈칸이 고깃집에도 있습니다.</p>
 
@@ -248,6 +255,7 @@ export default function SourcesGogi() {
       </table>
       <p>고깃집 설계를 마무리하려면 데이터 쪽에서 <b>① 식재료비 31%를 육류 전문점 42%로 바꿀지 결정</b>, <b>② 간판 250 vs 300, 대출 이자 6% vs 4.25% 같은 4-3의 남은 값 결정</b>,
         <b> ③ 정책자금 한도·금리를 기관 공고 원문으로 확인</b>, <b>④ 시뮬 결과를 범위(민감도)로 보여 주기</b>가 남아 있습니다. ④는 방향만 정했고 구현 전입니다.</p>
+      </Fold>
       <SourcesCash />
     </>
   );
