@@ -168,6 +168,14 @@
 .sx-dres-state { display: flex; gap: 6px; flex-wrap: wrap; }
 .sx-dres-vs { font-size: 14px; color: #33465f; }
 .sx-dres > small { font-size: 12px; color: #7a6a4a; line-height: 1.5; }
+.sx-alt { display: grid; gap: 8px; padding-top: 10px; border-top: 1px dashed #e8cf93; }
+.sx-alt-h { margin: 0; font-size: 13px; font-weight: 600; color: #5b6b82; }
+.sx-alt-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.sx-alt-btns button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 999px; border: 1px solid #d7c9a6; background: #fff; color: #33465f; cursor: pointer; }
+.sx-alt-btns button.on { background: #14233a; border-color: #14233a; color: #fff; }
+.sx-alt-btns button:disabled { opacity: 0.5; cursor: default; }
+.sx-alt-res { display: grid; gap: 8px; }
+.sx-alt-res > p { margin: 0; font-size: 14px; color: #33465f; }
 .sx-compare { padding: 16px 18px; border-radius: 16px; background: #f6f8fc; }
 .sx-vs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .sx-vs div { padding: 10px 14px; border-radius: 12px; background: #fff; display: grid; gap: 2px; }
