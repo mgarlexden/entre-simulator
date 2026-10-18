@@ -29,7 +29,7 @@ FAMILIES: dict[str, tuple[str, ...]] = {
     "neighborhood": ("dong_", "rent_dong_", "cafe_dong"),
     "meat_price": ("price_", "kmta_pork", "kmta_import", "kmta_retail_pork", "kmta_market_pork", "pork_retail", "pork_import",
                    "pork_wholesale", "pork_margin", "pork_stock", "pig_auction"),
-    "food_price": ("kosis_food_", "price_", "kosis_"),  # 채소, 쌀, 유지 등
+    "food_price": ("kamis_",),  # 채소·곡물 가격 (KAMIS 수집 파이프라인이 아직 없다)
     "livestock": ("kape_", "pig_", "kmta_hanwoo", "kmta_pork_grading", "kmta_pork_consumption"),
     "cafe": ("cafe_", "coffee_", "dessert_", "beverage_"),
     "cafe_cost": ("cafe_cost_", "cafe_startup", "cafe_investment"),
@@ -49,7 +49,7 @@ TOPIC_RE: list[tuple[str, re.Pattern]] = [
     ("livestock", re.compile(r"사육|마릿수|마리|두수|농장|농가|출하|도축|자돈|젖소|한우|육우|송아지")),
     # 고기 가격과 채소 가격 분리
     ("meat_price", re.compile(r"삼겹|목살|목심|항정|kg|지육|원육|고기 ?값|도매 ?가|소매 ?가|경락|시세|소비자가|돼지|소고기|닭고기")),
-    ("food_price", re.compile(r"상추|당근|배추|양배추|파|양파|감자|채소|쌀|유지|곡물|식량|물가|올랐|내렸|오를|내릴")),
+    ("food_price", re.compile(r"상추|깻잎|당근|배추|양배추|양파|감자|대파|쪽파|마늘|고추|오이|호박|버섯|채소|야채|쌀|밀가루|식용유|설탕|계란|달걀")),
     ("sales", re.compile(r"매출|객단가|폐업|생존|문 ?닫|결제|한식음식점")),
     ("neighborhood", re.compile(r"동네|행정동|유형")),
     ("cost", re.compile(r"영업이익률|원가율|마진|비용 ?구조|비율|퍼센트|몇 ?%|몇 ?프로")),
@@ -67,17 +67,51 @@ GU = re.compile(r"[가-힣]{1,3}구(?![가-힣])")
 PER_GU = re.compile(r"^(hansik_(?!seoul)|cafe_(?!seoul)|pork_(?!top|retail|import|wholesale|margin|stock))")
 EFFECT = re.compile(r"줄어|늘어|영향|효과|떨어|오르면|내리면|올리면|때문에|손님이 ?(줄|늘)")
 
-NONE_MESSAGE = ("죄송해요, 그 질문에는 확실한 근거 자료가 없어요. 📊\n"
-                "다음 주제들은 정확하게 답변할 수 있어요:\n"
+# 가격을 물을 수 있는 품목. 질문에 품목이 나오면 그 품목 이름이 들어간 근거만 답에 쓴다 (다른 품목으로 대신하지 않는다).
+ITEMS: list[tuple[str, re.Pattern]] = [
+    ("상추", re.compile(r"상추")), ("깻잎", re.compile(r"깻잎")), ("당근", re.compile(r"당근")),
+    ("배추", re.compile(r"(?<!양)배추")), ("양배추", re.compile(r"양배추")), ("양파", re.compile(r"양파")),
+    ("감자", re.compile(r"감자")), ("대파", re.compile(r"대파|쪽파")), ("마늘", re.compile(r"마늘")),
+    ("고추", re.compile(r"고추")), ("오이", re.compile(r"오이")), ("호박", re.compile(r"호박")),
+    ("버섯", re.compile(r"버섯")), ("채소", re.compile(r"채소|야채")), ("쌀", re.compile(r"쌀(?!국수)")),
+    ("밀가루", re.compile(r"밀가루")), ("식용유", re.compile(r"식용유")), ("설탕", re.compile(r"설탕")),
+    ("계란", re.compile(r"계란|달걀")), ("우유", re.compile(r"우유")),
+    ("원두", re.compile(r"원두|커피 ?콩")),
+    ("삼겹살", re.compile(r"삼겹")), ("목살", re.compile(r"목살|목심")), ("갈비", re.compile(r"갈비")),
+    ("항정살", re.compile(r"항정")), ("소고기", re.compile(r"소고기|쇠고기|한우")), ("닭고기", re.compile(r"닭")),
+    ("돼지고기", re.compile(r"돼지")),
+]
+PRICE_Q = re.compile(r"가격|얼마|시세|값|단가|비싸|싸[요나니게]|올랐|내렸|오르|내리|물가")
+PRICE_WORD = re.compile(r"가격|물가|시세|원/|원이에요|원이고")
+HAVE_PRICES = "지금 가격 자료가 있는 품목은 돼지고기(삼겹살·목심·갈비 등) 소비자가격과 물가지수, 카페 원두 구매량·구매 금액이에요."
+
+NONE_MESSAGE = ("죄송해요, 그 질문에 맞는 근거 자료를 찾지 못했어요.\n"
+                "이런 질문에는 자료를 바탕으로 답할 수 있어요.\n"
                 "• 월세, 보증금, 권리금 (지역별)\n"
-                "• 카페 비용: 인테리어, 보증금, 창업자금, 원두, 식재료비\n"
-                "• 카페 경쟁도: 지역별 카페 수, 폐업률, 매출\n"
+                "• 카페 창업 비용: 인테리어, 장비, 원두 구매량, 식재료비\n"
+                "• 카페·고깃집 경쟁: 지역별 가게 수, 폐업률, 매출\n"
                 "• 동네 분석: 유동인구, 직장인구, 동네 유형\n"
-                "• 축산물 가격: 돼지고기, 소고기, 닭고기\n"
-                "• 식품 물가: 채소, 쌀, 식용유 등\n"
-                "• 날씨, 공휴일\n"
-                "다른 질문이 있으신가요?")
+                "• 고기 가격: 돼지고기 소비자가격, 물가지수\n"
+                "• 날씨, 공휴일")
 OFF_MESSAGE = "죄송해요, 그건 이 서비스 범위를 벗어나요. 🙅\n이 서비스는 가게를 열 때 필요한 숫자(동네 분석, 월세, 창업 비용, 재료비, 메뉴 가격, 시뮬레이션)만 다뤄요.\n세금, 법률, 투자 상품, 주식 같은 질문은 전문가 상담을 받아보세요."
+
+
+# 업종 구분: 카페를 물으면 고깃집·한식 근거를, 고깃집을 물으면 카페 근거를 빼다
+CAFE_Q = re.compile(r"카페|커피|원두|음료|디저트|베이커리|아메리카노|라떼|에스프레소")
+MEAT_Q = re.compile(r"고깃집|고기|삼겹|목살|목심|갈비|항정|돼지|소고기|한우|닭|한식|육류|정육")
+MEAT_ID = re.compile(r"^(hansik|pork|kmta|kape|pig_|price_)")
+MEAT_TEXT = re.compile(r"한식음식점|고깃집|돼지|삼겹|육류")
+CAFE_ID = re.compile(r"^(cafe|coffee_|dessert_|beverage_)")
+
+
+def yeyo(s: str) -> str:
+    """'40kg/월' -> '40kg/월이에요', '12.7%' -> '12.7%예요' (받침에 맞춰 이에요/예요)."""
+    ch = s.rstrip()[-1:] or "요"
+    if "가" <= ch <= "힣":
+        batchim = (ord(ch) - 0xAC00) % 28 != 0
+    else:
+        batchim = ch in "013678" or ch.isalpha() and ch.lower() in "glmn"
+    return s + ("이에요" if batchim else "예요")
 
 
 # ---------------------------------------------------------------- 근거 읽기
@@ -126,19 +160,28 @@ def static_facts() -> tuple[list[dict], dict]:
             low, base, high = item.get("low"), item.get("base"), item.get("high")
             note = item.get("note", "")
 
-            # 기본값 범위를 명확한 텍스트로 작성
-            if low is not None or base is not None or high is not None:
-                if low == high and low is not None:
-                    text = f"{name}은 {low}{unit}이에요."
-                elif base is not None and low is not None and high is not None:
-                    text = f"{name}은 낮음 {low}{unit}, 기본 {base}{unit}, 높음 {high}{unit}이에요."
-                elif base is not None:
-                    text = f"{name}은 기본 {base}{unit}이에요."
-                else:
-                    text = f"{name}은 {low or ''}{unit}~{high or ''}{unit}이에요."
+            # 낮음/기본/높음은 매장 분포의 25·50·75% 분위수다
+            def fmt(v):
+                if unit == "비율":
+                    return f"{v * 100:.1f}%"
+                if unit.startswith("만원") and v >= 10000:
+                    eok, rest = divmod(round(v), 10000)
+                    return f"{eok}억" + (f" {rest:,}만원" if rest else "원") + unit[2:]
+                return f"{v:,}{unit}" if isinstance(v, int) else f"{v:,.1f}{unit}"
 
+            if low is not None or base is not None or high is not None:
+                if low is not None and low == high:
+                    text = f"{name}: {yeyo(fmt(low))}."
+                elif base is not None and low is not None and high is not None:
+                    text = f"{name}: 보통 {yeyo(fmt(base))}. 4곳 중 1곳은 {fmt(low)} 이하, 4곳 중 1곳은 {fmt(high)} 이상이에요."
+                elif base is not None:
+                    text = f"{name}: 보통 {yeyo(fmt(base))}."
+                else:
+                    text = f"{name}: {yeyo((fmt(low) if low is not None else '') + '~' + (fmt(high) if high is not None else ''))}."
                 if note:
-                    text += f" ({note})"
+                    text += f" 참고로 {note}."
+                if item.get("source"):
+                    text += f" (출처: {item['source']})"
 
                 # 주제 태그: 검색 가능하게 카테고리화
                 tags = ["카페", "비용"]
@@ -167,8 +210,9 @@ def static_facts() -> tuple[list[dict], dict]:
         sources.update(c["sources"])
     if d.get("sources"):
         sources.update(d["sources"])
-    if e.get("sources"):
-        sources.update(e["sources"])
+    if e.get("_meta"):
+        sources["cafe_cost"] = {"publisher": "농림축산식품부·한국농촌경제연구원", "title": "외식업체 경영실태조사 원자료 (카페 정리본)",
+                                "api": e["_meta"].get("source", ""), "url": "", "period": "2025년 조사"}
     if f.get("sources"):
         sources.update(f["sources"])
 
@@ -298,7 +342,7 @@ def allowed_ids(fid: str, tps: set[str], q: str) -> bool:
     for t in tps:
         pre += FAMILIES[t]
     if fid.startswith(tuple(pre)):
-        if PORK_PRICE.match(fid) and "price" not in tps:
+        if PORK_PRICE.match(fid) and "meat_price" not in tps:
             return False   # pork_retail_*, pork_wholesale_* 는 가격 주제에서만 (고깃집 점포 수 질문에 끼지 않게)
         return True
     return False
@@ -331,6 +375,22 @@ def run(q: str, ctx: dict | None = None, k: int = 3) -> dict:
     if not named_dong and "neighborhood" not in tps:
         pool = [f for f in pool if not f["id"].startswith(("dong_", "rent_dong_"))]
     pool = [f for f in pool if allowed_ids(f["id"], tps, q) or f["id"].startswith("live_") and "myshop" in tps]
+    cafe_q, meat_q = bool(CAFE_Q.search(q)), bool(MEAT_Q.search(q))
+    if cafe_q and not meat_q:
+        pool = [f for f in pool if not MEAT_ID.match(f["id"]) and not MEAT_TEXT.search(f["text"])]
+    elif meat_q and not cafe_q:
+        pool = [f for f in pool if not CAFE_ID.match(f["id"])]
+
+    # 품목 가격 질문: 물은 품목이 문장에 들어간 근거만 남긴다. 없으면 다른 품목으로 대신하지 않고 없다고 말한다.
+    asked = [(name, rx) for name, rx in ITEMS if rx.search(q)]
+    price_q = bool(asked) and PRICE_Q.search(q) and not tps & {"sales", "rent", "competition", "neighborhood", "myshop"}
+    if price_q:
+        pool = [f for f in pool if any(rx.search(f["text"]) for _, rx in asked)]
+        if not pool:
+            names = "·".join(n for n, _ in asked)
+            return {"answer": None, "facts": [], "citations": [],
+                    "message": f"현재 보유한 데이터에서는 {names} 가격을 확인할 수 없어요.\n{HAVE_PRICES}"}
+
     if not pool:
         return {"answer": None, "facts": [], "citations": [], "message": NONE_MESSAGE}
     if not GU.search(q) and not named_dong and tps & {"sales", "competition"} and "rent" not in tps:
@@ -376,7 +436,12 @@ def run(q: str, ctx: dict | None = None, k: int = 3) -> dict:
             continue
         cites.append({"id": sid, "title": s["title"], "publisher": s["publisher"], "year": s["period"],
                       "type": "화면 계산" if sid == "app" else "공공 API", "url": s["url"], "note": f"호출 식별자: {s['api']}"})
+    if price_q and not all(any(rx.search(f["text"]) for _, rx in asked) for f in facts_out):
+        return {"answer": None, "facts": [], "citations": [],
+                "message": f"현재 보유한 데이터에서는 {'·'.join(n for n, _ in asked)} 가격을 확인할 수 없어요.\n{HAVE_PRICES}"}
     answer = facts_out[0]["text"] if len(facts_out) == 1 else "\n".join(f"• {f['text']}" for f in facts_out)
+    if price_q and not any(PRICE_WORD.search(f["text"]) for f in facts_out):
+        answer = f"{'·'.join(n for n, _ in asked)}의 단위 가격(1kg당 시세 같은) 자료는 없어요. 대신 가게들이 실제로 쓰는 양과 돈을 알려 드려요.\n" + answer
     if EFFECT.search(q) and tps and "myshop" not in tps:
         answer = "이 일이 손님 수나 매출에 얼마나 영향을 주는지 직접 잰 자료는 없어요. 대신 관련 자료를 보여 드려요.\n" + answer
     return {"answer": answer, "facts": facts_out, "citations": cites}
