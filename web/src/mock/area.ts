@@ -165,11 +165,9 @@ export function insightOf(p: DongProfile): Insight | null {
     : { tag: "매출 성장", tone: "good", tab: "sales", text: `동 전체 한식 매출이 2024년보다 ${gs}% 늘었어요.` });
   if (p.comp === "약함") good.push({ tag: "경쟁 약함", tone: "good", tab: "comp", text: `${iga(S)} 드물어 경쟁이 덜해요 (1㎢당 ${p.pork_km2 ?? "-"}곳).` });
   if (p.cost === "낮음") good.push({ tag: "월세 저렴", tone: "good", tab: "cost", text: `평당 월세 ${rent}만원으로 싼 편이에요.` });
-  if (cafe && p.life != null && c.life && p.life >= c.life[1]) good.push({ tag: "오래 버팀", tone: "good", tab: "survive", text: `영업 중인 가게가 평균 ${p.life}개월째예요 (서울 ${p.s_life}개월).` });
-  if (p.rich) good.push({ tag: "소비 여력", tone: "good", tab: "sales", text: `아파트 평균 시가 ${won(p.apt_price ?? 0)}원으로 서울 상위 15%예요.` });
-  if (flowHi) good.push({ tag: "유동 많음", tone: "good", tab: "sales", text: `하루 유동인구가 ${Math.round(p.flow_day ?? 0).toLocaleString("ko-KR")}명으로 오가는 사람이 많아요.` });
-  else if ((p.subway ?? 0) >= 2) good.push({ tag: `지하철역 ${p.subway}곳`, tone: "good", tab: "sales", text: `동 안에 지하철역이 ${p.subway}곳 있어요.` });
-  const summary = { warn: warn.slice(0, 4), good: good.length ? good.slice(0, 3) : [AVERAGE] };
+  // 오래 버팀·소비 여력·유동 많음은 키워드 띠(bandOf)에 근거 카드로 나오므로 여기에는 넣지 않는다
+  // 동 단위는 좋은 점이 키워드 띠로 옮겨 갔을 수 있어서, 없으면 구 단위의 "평균 범위" 문장으로 채우지 않고 묶음을 비운다
+  const summary = { warn: warn.slice(0, 4), good: good.slice(0, 3) };
   return { style: `${lead}${base}`, why: baseWhy, keywords: keywords.slice(0, 4), actions, summary };
 }
 
@@ -231,6 +229,85 @@ export function guInsight(gu: string, names: string[]): GuInsight {
   if (rC > n - third) good.push({ tag: "폐업 적음", tone: "good", tab: "survive", text: closed });
   if (st.netOpen != null && st.netOpen > 0) good.push({ tag: "가게 증가", tone: "good", tab: "survive", text: `개업이 폐업보다 많아 ${iga(B)} 늘고 있어요 (${sign(st.netOpen)}${st.netOpen}%p).` });
   return { summary: { warn: warn.slice(0, 4), good: good.length ? good.slice(0, 3) : [AVERAGE] }, compete };
+}
+
+// ---- 동 단위 키워드 띠: '~형 상권' 이름의 단어와 키워드마다 근거 숫자 하나 --------------------------------------
+// 이름과 키워드는 insightOf의 규칙 그대로이고, 여기서는 그 규칙이 본 숫자를 카드로 옮기기만 한다(새 규칙 없음).
+export type BandCard = { label: string; value: string; sub: string };
+const people = (n: number | null) => (n == null ? "-" : n >= 10000 ? `${(Math.round(n / 1000) / 10).toLocaleString("ko-KR")}만 명` : `${n.toLocaleString("ko-KR")}명`);
+export function bandOf(p: DongProfile, ins: Insight): BandCard[] {
+  const c = cuts();
+  const cafe = industry() === "cafe", S = T().shop, W = cafe ? "카페 매출 비중" : "한식 매출 비중";
+  const out: BandCard[] = [];
+  // 같은 숫자는 한 번만: 다른 카드나 띠의 설명 문장(ins.why)에 이미 나온 비율이면 넣지 않는다
+  const nums = (t: string): string[] => t.match(/\d+(\.\d+)?%/g) ?? [];
+  const add = (b: BandCard) => {
+    const n = nums(b.value);
+    if (out.some((x) => x.label === b.label || x.value === b.value)) return;
+    if (n.length && n.every((x) => nums(ins.why).includes(x))) return;
+    out.push(b);
+  };
+  const age = p.age;
+  // 이름 앞말(뜨는·경쟁 센·식어가는·붐비는)은 매출 흐름과 경쟁이라 아래 '한눈에 보기'의 줄이 근거를 맡는다. 여기서는 손님·시간대·사람만.
+  if (ins.style.endsWith("직장인 회식형")) add({ label: "직장인", value: `점심 ${pct(p.shares.lunch)} · 주말 ${pct(p.shares.weekend)}`, sub: W });
+  if (ins.style.endsWith("청년 핫플형")) add({ label: "청년", value: `20대 매출 ${pct(p.shares.age20)}`, sub: `30대는 ${pct(p.shares.age30)}` });
+  if (ins.style.endsWith("부촌 단골형")) add({ label: "부촌", value: `아파트 ${won(p.apt_price ?? 0)}원`, sub: "평균 시가, 서울 상위 15%" });
+  if (ins.style.endsWith("동네 가족형")) add({ label: "가족", value: `주말 매출 ${pct(p.shares.weekend)}`, sub: `주민 ${people(p.resident_pop)}` });
+  if (ins.style.endsWith("생활 상권형")) {
+    add({ label: "생활", value: `주민 ${people(p.resident_pop)}`, sub: `직장인은 ${people(p.work_pop)}` });
+    add({ label: "고르게", value: `주말 ${pct(p.shares.weekend)} · 저녁 ${pct(p.shares.evening)}`, sub: W });
+  }
+  for (const k of ins.keywords) {
+    if (k === "점심 장사" || k === "점심 손님") add({ label: k, value: `점심 매출 ${pct(p.shares.lunch)}`, sub: c ? `서울 동네 위쪽 4분의 1은 ${pct(c.lunch_hi)} 이상` : W });
+    else if (k === "저녁 2차" || k === "저녁 손님") add({ label: k, value: `저녁 매출 ${pct(p.shares.evening)}`, sub: c ? `서울 동네 위쪽 4분의 1은 ${pct(c.evening_hi)} 이상` : W });
+    else if (k === "주말 손님") add({ label: k, value: `주말 매출 ${pct(p.shares.weekend)}`, sub: c ? `서울 동네 위쪽 4분의 1은 ${pct(c.weekend_hi)} 이상` : W });
+    else if (k === "2030") add({ label: k, value: `20대 매출 ${pct(p.shares.age20)}`, sub: `30대는 ${pct(p.shares.age30)}` });
+    else if (k === "4050 단골" && age) add({ label: k, value: `40·50대 매출 ${pct(age[3] + age[4])}`, sub: `20·30대는 ${pct(age[1] + age[2])}` });
+    else if (k === "유동 많음") add(c && (p.flow_day ?? 0) >= c.flow_hi
+      ? { label: k, value: `하루 유동 ${people(Math.round(p.flow_day ?? 0))}`, sub: "길단위 유동인구, 서울 동네 위쪽 4분의 1" }
+      : { label: k, value: `지하철역 ${p.subway}곳`, sub: "동 안의 역" });
+    else if (k === `${S} 거리`) add({ label: k, value: `한식 중 ${S} ${pct(p.pork_share ?? 0)}`, sub: "상가정보 2026년 6월" });
+    else if (k === "오래 버티는 상권") add({ label: k, value: `평균 ${p.life}개월`, sub: `영업 중인 가게, 서울 ${p.s_life}개월` });
+    else if (k === "상권 확장") add({ label: k, value: "상권확장", sub: "서울시 상권변화지표" });
+    else if (k === "여가·문화 소비") add({ label: k, value: `여가 지출 ${pct(p.leisure ?? 0)}`, sub: "동네 지출 중 여가·문화" });
+    else if (k === "객단가 높은 동네") add({ label: "객단가", value: `아파트 ${won(p.apt_price ?? 0)}원`, sub: "평균 시가, 서울 상위 15%" });
+    else if (k === "대학가") add({ label: k, value: `대학 ${p.univ}곳`, sub: "동 안의 대학교" });
+  }
+  return out;
+}
+
+// ---- 동 경쟁 탭: 가게 목록(dong_shops.json, pipelines/build_dong_shops.py)과 카페 구성(cafe_dong.json, 카페 팀 v6) ----------
+export type Brand = { b: string; low: boolean; n: number; branches: string[] };
+export type DongShops = { hansik: Record<string, number>; pork: string[]; cafe_brands: Brand[]; cafe_floor: { known: number; f1: number }; mix: Record<string, number> };
+export type ShopData = { _meta: { mix_quarter: string; mix_labels: string[]; seoul_hansik_share: Record<string, number> }; dong: Record<string, DongShops> };
+export type CafeRow = {
+  gu: string; code: string; name: string; cafes: number; franchise: number; lowcost: number; indie_coffee: number; indie_dessert: number; unmanned: number;
+  cf_stores: number; open_y: number; close_y: number; density: number; area_km2: number; franchise_share: number; resident_per_cafe: number; work_per_cafe: number;
+  near_station_share: number; subway: number;
+};
+let SHOPS: ShopData | null = null;
+let CAFE_ROWS: CafeRow[] = [];
+export const setShopData = (s: ShopData | null, cafe: { dong: CafeRow[] } | null) => { SHOPS = s; CAFE_ROWS = cafe?.dong ?? []; };
+export const shopMeta = () => SHOPS?._meta ?? null;
+export const shopsOf = (code: string): DongShops | null => SHOPS?.dong[code] ?? null;
+export const cafeRowOf = (code: string): CafeRow | undefined => CAFE_ROWS.find((r) => r.code === code);
+// 카페 밀도는 동네 지표 카드(cafe_dong_profile의 pork_km2)와 같게 카페 수 ÷ 동 면적으로 낸다. v6의 density 열은 면적 기준이 달라 값이 어긋난다.
+export const cafeDensity = (r: CafeRow) => (r.area_km2 ? r.cafes / r.area_km2 : 0);
+const median = (v: number[]) => { const s = [...v].sort((a, b) => a - b); const m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+// 서울 비교 기준: 카페 10곳 이상인 동. 비율은 동별 값의 중간값, 저가 비중만 서울 전체 합으로 낸다(동별 중간값이 0에 몰려서).
+export function cafeSeoul(gu: string) {
+  const rows = CAFE_ROWS.filter((r) => r.cafes >= 10);
+  const g = CAFE_ROWS.filter((r) => r.gu === gu);
+  const sum = (rs: CafeRow[], k: keyof CafeRow) => rs.reduce((a, r) => a + (r[k] as number), 0);
+  return {
+    n: rows.length,
+    density: median(rows.map(cafeDensity)),
+    densityRank: (v: number) => rows.filter((r) => cafeDensity(r) <= v).length / rows.length, // 한산한 쪽에서 몇 %
+    franchise: median(rows.map((r) => r.franchise_share)),
+    franchiseGu: g.length ? sum(g, "franchise") / Math.max(1, sum(g, "cafes")) : null,
+    lowcost: sum(CAFE_ROWS, "lowcost") / Math.max(1, sum(CAFE_ROWS, "cafes")),
+    close: median(rows.map((r) => r.close_y)),
+  };
 }
 
 // 자료를 모듈 변수에 들고 있어서, 이 파일이 핫리로드로 새로 불리면 자료가 비는데 화면은 로딩 완료로 남는다. 통째로 다시 불러 맞춘다.

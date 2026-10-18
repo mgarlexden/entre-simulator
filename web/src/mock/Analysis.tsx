@@ -5,7 +5,8 @@ import { useMemo, useState } from "react";
 import SeoulMap from "./SeoulMap";
 import DongMap, { dongRange } from "./DongMap";
 import Icon from "./Icons";
-import { DONG_METRICS, dongMetricKeys, cuts, geoOf, guInsight, hasDongMap, insightOf, meatSalesNote, picksOf, profileOf, profilesOf, rankWord, type DongMetric, type KTab, type Line, type Tone } from "./area";
+import { BbqComp, CafeComp } from "./DongComp";
+import { DONG_METRICS, bandOf, dongMetricKeys, cuts, geoOf, guInsight, hasDongMap, insightOf, meatSalesNote, picksOf, profileOf, profilesOf, rankWord, type DongMetric, type KTab, type Line, type Tone } from "./area";
 import { FUNDS, FUNDS_SRC } from "./funds";
 import { CAFE_KEY_MONEY, cafeEstimate } from "./cafe";
 import { DEPOSIT_MONTHS, METRICS, RAMP, T, iga, dongsOf, guStat, krei, kreiMean, man, openingCost, rankOf, recommend, rentData, type Gu, type Metric, type Profile } from "./model";
@@ -130,7 +131,7 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
       }] : [],
     },
     {
-      key: "survive", name: "생존", ...tagOf("survive", "폐업 보통"), value: String(st.closure), unit: "%", sub: "1년 폐업률",
+      key: "survive", name: "생존", ...tagOf("survive", st.area ? "구 기준" : "폐업 보통"), value: String(st.closure), unit: "%", sub: "1년 폐업률",
       basis: `${B}, ${cafe ? "최근 4분기" : "2025년"}${st.area ? " · 구 전체" : ""}`,
       rows: [
         ...(st.netOpen != null ? [{ title: "가게 수 흐름", sub: "개업률에서 폐업률을 뺀 값, 0보다 작으면 가게가 줄어드는 중", scope: guArea, value: `${sign(st.netOpen)}${st.netOpen}%p` }] : []),
@@ -141,6 +142,7 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
     },
   ];
   const kp = kpis.find((k) => k.key === ktab)!;
+  const band = ins && dp ? bandOf(dp, ins) : [];
   const recGroups = [
     { title: "규모는 작아도 성장하는 동네", items: picks.small },
     { title: "매출이 크고 꺾이지 않은 동네", items: picks.steady },
@@ -211,18 +213,58 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
                   </select>
                 )}
                 {st.area && <button type="button" className="a-backgu" onClick={() => pickDong("")}>{profile.gu} 전체로 돌아가기</button>}
+                {/* 추천 동네: 제목 옆 작은 버튼, 누르면 바로 아래에 펼친다 */}
+                <button type="button" className="a-rec-btn" aria-expanded={recOpen} aria-controls="rec-list" onClick={() => setRecOpen((o) => !o)}>
+                  <Icon name="star" size={15} />이런 동네는 어때요?<Icon name="arrow" size={16} />
+                </button>
               </div>
-              <small>제목 옆에서 동네를 바꾸거나, 아래 추천 동네나 지도에서 골라도 돼요</small>
+              <small>제목 옆에서 동네를 바꾸거나, 추천 동네나 지도에서 골라도 돼요</small>
+              {recOpen && (
+                <div className="a-rec-body" id="rec-list">
+                  <small>{profile.gu} 안에서 {S} 열기 좋은 동네를 골라 봤어요. 누르면 이 화면의 지표가 그 동네로 바뀌어요.</small>
+                  {recGroups.length > 0 ? recGroups.map((g) => (
+                    <div className="a-rec-grp" key={g.title}>
+                      <h3>{g.title}</h3>
+                      {g.items.map(({ p, note }) => {
+                        const on = st.area === p.name;
+                        return (
+                          <button type="button" key={p.code} className="a-rec-item" aria-pressed={on} onClick={() => pickDong(p.name)}>
+                            <span className="a-rec-name">{p.name}{on && <span className="a-rec-on">보는 중</span>}<Icon name="arrow" size={18} /></span>
+                            <small>{note}</small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )) : <p className="a-rec-none">이 구에는 기준에 맞는 동네가 아직 없어요. 지도에서 직접 골라 보세요.</p>}
+                </div>
+              )}
+              {st.area && <p className="a-lead">{st.area} {S}{cafe ? "는" : "은"} 한 곳당 한 달에 {cafe ? "보통 " : ""}<mark>{man(st.sales)}</mark>쯤 팔아요.</p>}
             </header>
+
+            {/* 키워드 띠는 '어떤 동네인가'(손님·시간대·사람), 아래 한눈에 보기는 '좋은가 나쁜가'(매출 흐름·경쟁·월세·생존). 같은 숫자를 두 번 쓰지 않는다 */}
+            {ins && dp && (
+              <section className="a-kw" aria-labelledby="kw-title">
+                <span id="kw-title" className="a-kw-eyebrow">이 동네는 이런 상권이에요</span>
+                <div className="a-kw-name">
+                  <strong>{ins.style}</strong>
+                  {ins.keywords.map((k) => <span key={k}>{k}</span>)}
+                </div>
+                <p>{ins.why}.</p>
+                {band.length > 0 && (
+                  <div className="a-kw-cards">
+                    {band.map((b) => (
+                      <div key={b.label}><span>{b.label}</span><b>{b.value}</b><small>{b.sub}</small></div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             <section className="a-sum" aria-labelledby="sum-title">
               <div className="a-sum-head">
                 <h2 id="sum-title">{scope} 한눈에 보기</h2>
                 <small>태그를 누르면 바로 아래 지표로 연결돼요</small>
               </div>
-              {ins && dp && (
-                <p className="a-style"><b>{ins.keywords.length ? ins.keywords.join(" · ") : ins.style}</b> {ins.keywords.length ? ins.style : ""} <small>{ins.why}</small></p>
-              )}
               {([["눈여겨볼 점", "good", summary.good], ["주의할 점", "warn", summary.warn]] as const).map(([title, tone, ls]) => ls.length > 0 && (
                 <div className="a-sum-grp" key={tone}>
                   <h3 className={`is-${tone}`}>{title}</h3>
@@ -235,39 +277,14 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
                 </div>
               ))}
               {ins && dp && ins.actions.length > 0 && (
-                <><p className="a-sub">이렇게 해 보세요</p>
-                <ol className="m-acts">
-                  {ins.actions.map((a) => <li key={a.text}>{a.text}<small>{a.why}</small></li>)}
-                </ol></>
+                <div className="a-acts">
+                  <p className="a-sub">이렇게 해 보세요</p>
+                  {/* 근거 숫자는 바로 위 줄과 키워드 띠에 이미 있어서 제안 문장만 보인다 */}
+                  <ol className="m-acts">
+                    {ins.actions.map((a) => <li key={a.text}>{a.text}</li>)}
+                  </ol>
+                </div>
               )}
-
-              {/* 추천 동네: 요약을 읽은 바로 다음에 펼쳐 보는 자리. 접어 두면 문구 한 줄만 차지한다 */}
-              <div className="a-rec">
-                <button type="button" className="a-rec-toggle" aria-expanded={recOpen} aria-controls="rec-list" onClick={() => setRecOpen((o) => !o)}>
-                  <span className="a-rec-badge"><Icon name="star" size={14} />추천 동네</span>
-                  <b>이런 동네는 어때요?</b>
-                  <Icon name="arrow" size={18} />
-                </button>
-                {recOpen && (
-                  <div className="a-rec-body" id="rec-list">
-                    <small>{profile.gu} 안에서 {S} 열기 좋은 동네를 골라 봤어요. 누르면 이 화면의 지표가 그 동네로 바뀌어요.</small>
-                    {recGroups.length > 0 ? recGroups.map((g) => (
-                      <div className="a-rec-grp" key={g.title}>
-                        <h3>{g.title}</h3>
-                        {g.items.map(({ p, note }) => {
-                          const on = st.area === p.name;
-                          return (
-                            <button type="button" key={p.code} className="a-rec-item" aria-pressed={on} onClick={() => pickDong(p.name)}>
-                              <span className="a-rec-name">{p.name}{on && <span className="a-rec-on">보는 중</span>}<Icon name="arrow" size={18} /></span>
-                              <small>{note}</small>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )) : <p className="a-rec-none">이 구에는 기준에 맞는 동네가 아직 없어요. 지도에서 직접 골라 보세요.</p>}
-                  </div>
-                )}
-              </div>
             </section>
 
             <div className="a-ktabs" role="tablist" aria-label={`${scope} 지표`}>
@@ -283,7 +300,9 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
 
             <div className="a-kpanel" role="tabpanel" id="kpanel" aria-labelledby={`kt-${ktab}`}>
               <p className="a-kpanel-title">주요 지표 상세</p>
-              {kp.rows.map((r) => <DetailRow key={r.title} {...r} />)}
+              {ktab === "comp" && dp
+                ? (cafe ? <CafeComp p={dp} gu={profile.gu} /> : <BbqComp p={dp} count={count} />)
+                : kp.rows.map((r) => <DetailRow key={r.title} {...r} />)}
               {ktab === "cost" && (
                 <div className="a-rent">
                   <label htmlFor="rent-in">찾아 둔 매물이 있다면 평당 월세를 넣어 보세요 <small>(선택)</small></label>
