@@ -27,11 +27,13 @@ FAMILIES: dict[str, tuple[str, ...]] = {
     "competition": ("pork", "dong_", "live_shop", "cafe_competition"),
     "sales": ("hansik", "cafe", "dong_", "cafe_sales"),
     "neighborhood": ("dong_", "rent_dong_", "cafe_dong"),
-    "price": ("price_", "kmta_pork", "kmta_import", "kmta_retail_pork", "kmta_market_pork", "pork_retail", "pork_import",
-              "pork_wholesale", "pork_margin", "pork_stock", "pig_auction", "cafe_menu_price"),
+    "meat_price": ("price_", "kmta_pork", "kmta_import", "kmta_retail_pork", "kmta_market_pork", "pork_retail", "pork_import",
+                   "pork_wholesale", "pork_margin", "pork_stock", "pig_auction"),
+    "food_price": ("kosis_food_", "price_", "kosis_"),  # 채소, 쌀, 유지 등
     "livestock": ("kape_", "pig_", "kmta_hanwoo", "kmta_pork_grading", "kmta_pork_consumption"),
     "cafe": ("cafe_", "coffee_", "dessert_", "beverage_"),
     "cafe_cost": ("cafe_cost_", "cafe_startup", "cafe_investment"),
+    "cafe_menu_price": ("cafe_menu_price",),  # 카페 메뉴 가격
     "cost": ("kosis_", "cafe_cost_"),
     "myshop": ("live_", "cafe_myshop"),
 }
@@ -42,10 +44,12 @@ TOPIC_RE: list[tuple[str, re.Pattern]] = [
     # 카페 관련: café_cost > café > café 가격
     ("cafe_cost", re.compile(r"카페 ?창업|카페 ?오픈|카페 ?비용|카페 ?투자|카페 ?인테리어|카페 ?장비|에스프레소 ?머신|커피 ?머신|그라인더|쇼케이스|원두 ?가격|원두 ?구매|커피 ?원두|원두|식재료비|인건비|보증금|권리금|아메리카노 ?가격|라떼 ?가격|카페 ?메뉴 ?가격|음료 ?가격")),
     ("cafe", re.compile(r"카페 ?(동네|분석|특성|환경|입지|위치)|커피 ?(전문|가게)|디저트|베이커리|음료 ?(가게|점포)|아메리카노|라떼|에스프레소|카푸치노")),
-    # 고깃집 관련: competition > livestock > price (고기만)
+    # 고깃집 관련: competition > livestock > meat_price (고기만)
     ("competition", re.compile(r"경쟁|몇 ?곳|몇 ?군데|가게 ?수|점포 ?수|고깃집 ?수|고깃집이 ?몇|몇 ?개|가장 많은 ?(구|동)|새로 ?생기|카페 ?수|카페가 ?몇")),
     ("livestock", re.compile(r"사육|마릿수|마리|두수|농장|농가|출하|도축|자돈|젖소|한우|육우|송아지")),
-    ("price", re.compile(r"가격|시세|도매|소비자가|소매|경락|삼겹|목살|목심|항정|kg|지육|원육|고기 ?값|물가|올랐|내렸|오를|내릴|상추|당근|배추|양배추|파|양파|감자|채소|쌀|유지|육류|축산물|돼지|소고기|닭고기")),
+    # 고기 가격과 채소 가격 분리
+    ("meat_price", re.compile(r"삼겹|목살|목심|항정|kg|지육|원육|고기 ?값|도매 ?가|소매 ?가|경락|시세|소비자가|돼지|소고기|닭고기")),
+    ("food_price", re.compile(r"상추|당근|배추|양배추|파|양파|감자|채소|쌀|유지|곡물|식량|물가|올랐|내렸|오를|내릴")),
     ("sales", re.compile(r"매출|객단가|폐업|생존|문 ?닫|결제|한식음식점")),
     ("neighborhood", re.compile(r"동네|행정동|유형")),
     ("cost", re.compile(r"영업이익률|원가율|마진|비용 ?구조|비율|퍼센트|몇 ?%|몇 ?프로")),
@@ -69,7 +73,8 @@ NONE_MESSAGE = ("죄송해요, 그 질문에는 확실한 근거 자료가 없�
                 "• 카페 비용: 인테리어, 보증금, 창업자금, 원두, 식재료비\n"
                 "• 카페 경쟁도: 지역별 카페 수, 폐업률, 매출\n"
                 "• 동네 분석: 유동인구, 직장인구, 동네 유형\n"
-                "• 농축산물 가격: 돼지고기, 쌀, 채소 등\n"
+                "• 축산물 가격: 돼지고기, 소고기, 닭고기\n"
+                "• 식품 물가: 채소, 쌀, 식용유 등\n"
                 "• 날씨, 공휴일\n"
                 "다른 질문이 있으신가요?")
 OFF_MESSAGE = "죄송해요, 그건 이 서비스 범위를 벗어나요. 🙅\n이 서비스는 가게를 열 때 필요한 숫자(동네 분석, 월세, 창업 비용, 재료비, 메뉴 가격, 시뮬레이션)만 다뤄요.\n세금, 법률, 투자 상품, 주식 같은 질문은 전문가 상담을 받아보세요."
@@ -98,6 +103,7 @@ def static_facts() -> tuple[list[dict], dict]:
     c = _load("cafe_gu.json")
     d = _load("cafe_dong.json")
     e = _load("cafe_cost.json")
+    f = _load("kosis_food.json")  # 채소·식품 물가지수
 
     facts = a["facts"] + b["facts"]
     # 카페 JSON을 facts 형태로 변환
@@ -163,6 +169,8 @@ def static_facts() -> tuple[list[dict], dict]:
         sources.update(d["sources"])
     if e.get("sources"):
         sources.update(e["sources"])
+    if f.get("sources"):
+        sources.update(f["sources"])
 
     return facts, sources
 
