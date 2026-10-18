@@ -1,7 +1,7 @@
 // 동네(행정동) 분석: 경쟁 강도, 비용, 성장, 동네 특징을 한 번에 묶어 '~형 상권' 이름과 키워드, 해 볼 일을 만든다.
 // 숫자는 dong_profile.json(pipelines/build_dong_profile.py), 경계는 seoul_dong.json(pipelines/build_seoul_dong.py).
 // 이름·키워드·제안은 현장 조사가 아니라 아래 규칙으로 만든다. 규칙마다 근거 숫자를 같이 보여 준다(why).
-import { T, dongsOf, guStat, iga, industry, kreiMean, krei, rankOf, setIndustry, type Dong, type Industry } from "./model";
+import { T, cashRent, dongsOf, growthMeta, guStat, iga, industry, kreiMean, krei, rankOf, setIndustry, type Dong, type Industry } from "./model";
 
 export type DongProfile = {
   gu: string; name: string; code: string; stores: number; pork: number; type: string;
@@ -60,10 +60,22 @@ export function dongValue(m: DongMetric, p: DongProfile, d: Dong | undefined): n
   return p.rent ?? p.rent_gu;
 }
 
+// ---- 요약 줄: 태그 하나에 문장 하나, 태그를 누르면 짝이 되는 지표 탭(KTab)이 열린다 ------------------------------------------
+export type Tone = "good" | "mid" | "warn";
+export type KTab = "sales" | "comp" | "cost" | "survive";
+export type Line = { tag: string; tone: Tone; tab: KTab; text: string };
+export type Summary = { warn: Line[]; good: Line[] };
+// 순위를 기준과 함께 풀어 쓴다: 위쪽 절반이면 "25개 구 중 3번째로 많아요", 아래쪽이면 아래에서 센다 "25개 구 중 가장 적어요".
+export function rankWord(r: number, n: number, hi: string, lo: string): string {
+  if (r <= Math.ceil(n / 2)) return r === 1 ? `${n}개 구 중 가장 ${hi}` : `${n}개 구 중 ${r}번째로 ${hi}`;
+  const b = n - r + 1;
+  return b === 1 ? `${n}개 구 중 가장 ${lo}` : `${n}개 구 중 ${b}번째로 ${lo}`;
+}
+const AVERAGE: Line = { tag: "평균 범위", tone: "mid", tab: "sales", text: "눈에 띄게 좋은 점은 없지만, 매출 수준은 서울 평균 범위예요." };
+
 // ---- 이름, 키워드, 제안 --------------------------------------------------------------------------------
-export type Chip = { label: string; tone: "good" | "mid" | "warn" };
 export type Insight = {
-  style: string; why: string; chips: Chip[]; keywords: string[]; actions: { text: string; why: string }[]; pros: string[]; cons: string[];
+  style: string; why: string; keywords: string[]; actions: { text: string; why: string }[]; summary: Summary;
 };
 const sign = (v: number | null) => (v != null && v > 0 ? "+" : "");
 const pct = (x: number) => `${Math.round(x * 100)}%`;
@@ -73,7 +85,9 @@ export function insightOf(p: DongProfile): Insight | null {
   const c = cuts();
   if (!c) return null;
   const cafe = industry() === "cafe", S = T().shop, W = cafe ? "카페 매출" : "한식 매출";
-  const rent = p.rent ?? p.rent_gu;
+  // 동 프로필의 월세와 기준선은 보증금 환산분이 들어간 값이라(분류는 그 값끼리 비교) 문장에는 지표 카드와 같은 현금 월세로 바꿔 쓴다
+  const cash = (v: number) => Math.round(cashRent(v) * 10) / 10;
+  const rent = cash(p.rent ?? p.rent_gu ?? 0), rentHi = cash(c.rent[1]).toFixed(1);
   const lunchHi = p.shares.lunch >= c.lunch_hi, eveHi = p.shares.evening >= c.evening_hi, weekHi = p.shares.weekend >= c.weekend_hi;
   const porkHi = (p.pork_share ?? 0) >= c.pork_share_hi, flowHi = (p.flow_day ?? 0) >= c.flow_hi;
 
@@ -91,12 +105,6 @@ export function insightOf(p: DongProfile): Insight | null {
   else if (p.comp === "치열" && p.grow !== "성장") lead = "경쟁 센 ";
   else if (p.grow === "하락" && p.comp === "약함") lead = "식어가는 ";
   else if (p.grow === "성장" && p.comp === "치열") lead = "붐비는 ";
-
-  const chips: Chip[] = [];
-  if (cafe && p.change) chips.push({ label: `상권 ${p.change}`, tone: p.change === "상권확장" ? "good" : p.change === "상권축소" ? "warn" : "mid" });
-  if (p.comp) chips.push({ label: `경쟁 ${p.comp}`, tone: p.comp === "약함" ? "good" : p.comp === "보통" ? "mid" : "warn" });
-  if (p.grow) chips.push({ label: cafe ? `가게 수 ${p.grow === "성장" ? "증가" : p.grow === "하락" ? "감소" : "보합"}` : `매출 ${p.grow === "성장" ? "성장" : p.grow === "하락" ? "하락" : "보합"}`, tone: p.grow === "성장" ? "good" : p.grow === "보합" ? "mid" : "warn" });
-  if (p.cost) chips.push({ label: `월세 ${p.cost}`, tone: p.cost === "낮음" ? "good" : p.cost === "보통" ? "mid" : "warn" });
 
   const keywords: string[] = [];
   if (lunchHi) keywords.push(cafe ? "점심 손님" : "점심 장사");
@@ -118,7 +126,7 @@ export function insightOf(p: DongProfile): Insight | null {
   const group6 = groups ? Math.round(groups["단체(6인 이상)"]) : null;
   const pair = groups ? Math.round(groups["2~5인"]) : null;
   if (p.comp === "치열") A.push({ w: 9, text: "비슷한 가게가 많아요. 부위, 반찬, 가격대 가운데 한 가지 차별점을 먼저 정하세요.", why: `고깃집 ${p.pork_km2}곳/㎢로 서울 동네의 위쪽 3분의 1이에요` });
-  if (p.cost === "높음") A.push({ w: 8, text: "월세가 높은 편이에요. 평수를 줄이거나 직원을 한 명 덜어 다달이 나가는 돈을 낮춰 보세요.", why: `평당 월세 ${rent}만원 (서울 동네 위쪽 3분의 1은 ${c.rent[1].toFixed(1)}만원 이상)` });
+  if (p.cost === "높음") A.push({ w: 8, text: "월세가 높은 편이에요. 평수를 줄이거나 직원을 한 명 덜어 다달이 나가는 돈을 낮춰 보세요.", why: `평당 월세 ${rent}만원 (서울 동네 위쪽 3분의 1은 ${rentHi}만원 이상)` });
   if (p.grow === "성장" && p.comp !== "치열") A.push({ w: 10, text: "성장하는데 경쟁이 세지 않은 동네예요. 단골을 일찍 잡는 쪽이 유리해요.", why: `한식 매출 ${p.growth! > 0 ? "+" : ""}${p.growth}% (2024 대비), 고깃집 ${p.pork_km2 ?? "-"}곳/㎢` });
   if (p.grow === "하락") A.push({ w: 8, text: "매출이 줄어드는 동네예요. 첫 6개월 버틸 현금을 더 남겨 두세요.", why: `한식 매출 ${p.growth}% (2024 대비)` });
   if (lunchHi) A.push({ w: 6, text: "점심 손님이 많아요. 점심 한 상 메뉴를 따로 두고 영업을 낮 시간부터 여는 걸 따져 보세요.", why: `11~14시 매출 비중 ${pct(p.shares.lunch)} (서울 동네 위쪽 4분의 1은 ${pct(c.lunch_hi)} 이상)` });
@@ -130,7 +138,7 @@ export function insightOf(p: DongProfile): Insight | null {
     A.length = 0;
     const gs = p.growth != null ? `${sign(p.growth)}${p.growth}%p` : "";
     if (p.comp === "치열") A.push({ w: 9, text: "비슷한 카페가 많아요. 원두, 디저트, 자리 분위기 가운데 한 가지 차별점을 먼저 정하세요.", why: `카페 ${p.pork_km2}곳/㎢로 서울 동네의 위쪽 3분의 1이에요` });
-    if (p.cost === "높음") A.push({ w: 8, text: "월세가 높은 편이에요. 평수를 줄이거나 직원을 한 명 덜어 다달이 나가는 돈을 낮춰 보세요.", why: `평당 월세 ${rent}만원 (서울 동네 위쪽 3분의 1은 ${c.rent[1].toFixed(1)}만원 이상)` });
+    if (p.cost === "높음") A.push({ w: 8, text: "월세가 높은 편이에요. 평수를 줄이거나 직원을 한 명 덜어 다달이 나가는 돈을 낮춰 보세요.", why: `평당 월세 ${rent}만원 (서울 동네 위쪽 3분의 1은 ${rentHi}만원 이상)` });
     if (p.grow === "성장" && p.comp !== "치열") A.push({ w: 10, text: "가게가 늘고 있는데 경쟁이 세지 않은 동네예요. 단골을 일찍 잡는 쪽이 유리해요.", why: `개업이 폐업보다 ${gs} 많아요, 카페 ${p.pork_km2 ?? "-"}곳/㎢` });
     if (p.grow === "하락") A.push({ w: 8, text: "폐업이 개업보다 많은 동네예요. 첫 6개월 버틸 현금을 더 남겨 두세요.", why: `개업률 − 폐업률 ${gs}` });
     if (p.type === "오피스") A.push({ w: 7, text: "직장인 동네예요. 출근길과 점심 직후 주문이 빨리 나가는 동선을 먼저 잡으세요.", why: `점심 매출 비중 ${pct(p.shares.lunch)}, 주말 ${pct(p.shares.weekend)}` });
@@ -142,20 +150,27 @@ export function insightOf(p: DongProfile): Insight | null {
   }
   const actions = A.sort((a, b) => b.w - a.w).slice(0, 3).map(({ text, why }) => ({ text, why }));
 
-  // 좋은 점과 아쉬운 점: 칩과 같은 규칙, 숫자를 붙여서
-  const pros: string[] = [], cons: string[] = [];
-  if (p.comp === "약함") pros.push(`${iga(S)} 드물어 경쟁이 덜해요 (${p.pork_km2 ?? "-"}곳/㎢)`);
-  if (p.comp === "치열") cons.push(`${iga(S)} 촘촘해 경쟁이 세요 (${p.pork_km2}곳/㎢)`);
-  if (p.grow === "성장") pros.push(cafe ? `개업이 폐업보다 ${sign(p.growth)}${p.growth}%p 많아요` : `한식 매출이 ${sign(p.growth)}${p.growth}% 늘었어요 (2024 대비)`);
-  if (p.grow === "하락") cons.push(cafe ? `폐업이 개업보다 ${Math.abs(p.growth ?? 0)}%p 많아요` : `한식 매출이 ${p.growth}% 줄었어요 (2024 대비)`);
-  if (p.cost === "낮음") pros.push(`월세가 싼 편이에요 (평당 ${rent}만원)`);
-  if (p.cost === "높음") cons.push(`월세가 비싼 편이에요 (평당 ${rent}만원)`);
-  if (cafe && p.life != null && c.life && p.life >= c.life[1]) pros.push(`영업 중인 가게가 평균 ${p.life}개월째예요 (서울 ${p.s_life}개월)`);
-  if (cafe && p.close_life != null && c.close_life && p.close_life <= c.close_life[0]) cons.push(`문 닫은 가게는 평균 ${p.close_life}개월 만에 닫았어요 (서울 ${p.s_close}개월)`);
-  if (p.rich) pros.push("집값이 높은 동네라 소비 여력이 커요");
-  if (flowHi || (p.subway ?? 0) >= 2) pros.push("오가는 사람이 많은 길목이에요");
-  if (p.pop_per_pork != null && p.pop_per_pork < 150) cons.push(`${S} 1곳당 인구가 ${p.pop_per_pork}명뿐이에요`);
-  return { style: `${lead}${base}`, why: baseWhy, chips, keywords: keywords.slice(0, 4), actions, pros: pros.slice(0, 3), cons: cons.slice(0, 2) };
+  // 주의할 점과 눈여겨볼 점: 줄마다 태그 하나, 숫자를 붙인 문장 하나
+  const warn: Line[] = [], good: Line[] = [];
+  const gs = `${sign(p.growth)}${p.growth}`;
+  if (p.grow === "하락") warn.push(cafe
+    ? { tag: "가게 수 감소", tone: "warn", tab: "survive", text: `폐업이 개업보다 ${Math.abs(p.growth ?? 0)}%p 많아요 (최근 4분기).` }
+    : { tag: "매출 하락", tone: "warn", tab: "sales", text: `동 전체 한식 매출이 2024년보다 ${Math.abs(p.growth ?? 0)}% 줄었어요.` });
+  if (p.comp === "치열") warn.push({ tag: "경쟁 치열", tone: "warn", tab: "comp", text: `${iga(S)} 촘촘해 경쟁이 세요 (1㎢당 ${p.pork_km2}곳).` });
+  if (p.pop_per_pork != null && p.pop_per_pork < 150) warn.push({ tag: "인구 대비 많음", tone: "warn", tab: "comp", text: `${S} 1곳당 주민·직장인이 ${p.pop_per_pork}명뿐이에요.` });
+  if (p.cost === "높음") warn.push({ tag: "월세 높음", tone: "warn", tab: "cost", text: `평당 월세 ${rent}만원으로 비싼 편이에요 (서울 동네 위쪽 3분의 1은 ${rentHi}만원 이상).` });
+  if (cafe && p.close_life != null && c.close_life && p.close_life <= c.close_life[0]) warn.push({ tag: "빨리 닫음", tone: "warn", tab: "survive", text: `문 닫은 가게는 평균 ${p.close_life}개월 만에 닫았어요 (서울 ${p.s_close}개월).` });
+  if (p.grow === "성장") good.push(cafe
+    ? { tag: "가게 수 증가", tone: "good", tab: "survive", text: `개업이 폐업보다 ${gs}%p 많아요 (최근 4분기).` }
+    : { tag: "매출 성장", tone: "good", tab: "sales", text: `동 전체 한식 매출이 2024년보다 ${gs}% 늘었어요.` });
+  if (p.comp === "약함") good.push({ tag: "경쟁 약함", tone: "good", tab: "comp", text: `${iga(S)} 드물어 경쟁이 덜해요 (1㎢당 ${p.pork_km2 ?? "-"}곳).` });
+  if (p.cost === "낮음") good.push({ tag: "월세 저렴", tone: "good", tab: "cost", text: `평당 월세 ${rent}만원으로 싼 편이에요.` });
+  if (cafe && p.life != null && c.life && p.life >= c.life[1]) good.push({ tag: "오래 버팀", tone: "good", tab: "survive", text: `영업 중인 가게가 평균 ${p.life}개월째예요 (서울 ${p.s_life}개월).` });
+  if (p.rich) good.push({ tag: "소비 여력", tone: "good", tab: "sales", text: `아파트 평균 시가 ${won(p.apt_price ?? 0)}원으로 서울 상위 15%예요.` });
+  if (flowHi) good.push({ tag: "유동 많음", tone: "good", tab: "sales", text: `하루 유동인구가 ${Math.round(p.flow_day ?? 0).toLocaleString("ko-KR")}명으로 오가는 사람이 많아요.` });
+  else if ((p.subway ?? 0) >= 2) good.push({ tag: `지하철역 ${p.subway}곳`, tone: "good", tab: "sales", text: `동 안에 지하철역이 ${p.subway}곳 있어요.` });
+  const summary = { warn: warn.slice(0, 4), good: good.length ? good.slice(0, 3) : [AVERAGE] };
+  return { style: `${lead}${base}`, why: baseWhy, keywords: keywords.slice(0, 4), actions, summary };
 }
 
 // ---- 이 구에서 눈여겨볼 동네 -------------------------------------------------------------------------
@@ -164,14 +179,18 @@ export function picksOf(gu: string): { small: Pick[]; steady: Pick[] } {
   const ds = dongsOf(gu);
   const byName = new Map(ds.map((d) => [d.name, d]));
   const rows = profilesOf(gu).map((p) => ({ p, d: byName.get(p.name) })).filter((x) => x.p.stores >= 20);
+  const cafe = industry() === "cafe";
+  const note = ({ p, d }: { p: DongProfile; d: Dong | undefined }) =>
+    `구 평균 대비 매출 ${Math.round(d!.rel! * 100)}% · ${cafe ? "가게 수 흐름" : "성장"} ${sign(p.growth)}${p.growth}${cafe ? "%p" : "%"} · 경쟁 ${p.comp ?? "비교 없음"}`;
   const small = rows
     .filter(({ p, d }) => d?.rel != null && d.rel < 1 && p.grow === "성장" && p.comp !== "치열")
     .sort((a, b) => (b.p.growth ?? 0) - (a.p.growth ?? 0)).slice(0, 3)
-    .map(({ p, d }) => ({ p, d, note: industry() === "cafe" ? `매출은 구 평균의 ${Math.round(d!.rel! * 100)}%지만 개업이 폐업보다 ${p.growth}%p 많고, 경쟁은 ${p.comp}` : `매출은 구 평균의 ${Math.round(d!.rel! * 100)}%지만 ${p.growth! > 0 ? "+" : ""}${p.growth}% 크고, 경쟁은 ${p.comp}` }));
+    .map((x) => ({ ...x, note: note(x) }));
+  // '꺾이지 않은' 동네라 성장률이 0% 이상인 곳만 넣는다 ('보합'에는 -0.9% 같은 감소가 섞여 있었다)
   const steady = rows
-    .filter(({ p, d }) => d?.rel != null && d.rel >= 1.05 && p.grow !== "하락")
+    .filter(({ p, d }) => d?.rel != null && d.rel >= 1.05 && p.growth != null && p.growth >= 0)
     .sort((a, b) => (b.d!.rel ?? 0) - (a.d!.rel ?? 0)).slice(0, 3)
-    .map(({ p, d }) => ({ p, d, note: `매출 구 평균의 ${Math.round(d!.rel! * 100)}%, ${industry() === "cafe" ? "가게 수 흐름" : "성장"} ${p.growth! > 0 ? "+" : ""}${p.growth}${industry() === "cafe" ? "%p" : "%"}, 경쟁 ${p.comp ?? "비교 없음"}` }));
+    .map((x) => ({ ...x, note: note(x) }));
   return { small, steady };
 }
 
@@ -180,28 +199,38 @@ export const meatSalesNote = () => {
   return a && b ? { meat: a, all: b, ratio: a / b } : null;
 };
 
-// ---- 구 단위: "OO구, 이런 점이 좋아요!" ------------------------------------------------------------------
-export type GuInsight = { pros: string[]; cons: string[]; chips: Chip[]; compete: "약함" | "보통" | "치열" };
+// ---- 구 단위: "OO구 한눈에 보기" ---------------------------------------------------------------------------
+export type GuInsight = { summary: Summary; compete: "약함" | "보통" | "치열" };
 export function guInsight(gu: string, names: string[]): GuInsight {
   const st = guStat(gu), n = names.length;
   const third = Math.ceil(n / 3);
+  const S = T().shop, B = T().base, cafe = industry() === "cafe";
   const rD = rankOf(gu, "demand", names), rG = rankOf(gu, "growth", names), rP = rankOf(gu, "pork", names), rC = rankOf(gu, "closure", names);
   const rentRank = names.filter((x) => guStat(x).rent > st.rent).length + 1; // 비싼 순
-  const pros: string[] = [], cons: string[] = [], chips: Chip[] = [];
-  if (rD <= third) { pros.push(industry() === "cafe" ? `카페 한 곳당 매출이 높아요 (${n}개 구 중 ${rD}번째)` : `고깃집이 속한 한식 가게의 한 곳당 매출이 높아요 (${n}개 구 중 ${rD}번째)`); chips.push({ label: "매출 상위", tone: "good" }); }
-  if (rD > n - third) { cons.push(`한 곳당 매출이 낮은 편이에요 (${n}개 구 중 ${rD}번째)`); chips.push({ label: "매출 하위", tone: "warn" }); }
-  if (industry() === "bbq" && st.growth != null && rG <= third && st.growth > 0) { pros.push(`매출이 2024년보다 ${st.growth}% 늘었어요 (${rG}번째)`); chips.push({ label: "성장 중", tone: "good" }); }
-  if (industry() === "bbq" && st.growth != null && (rG > n - third || st.growth < -1.5)) { cons.push(`매출이 2024년보다 ${st.growth}% 줄었어요 (${rG}번째)`); chips.push({ label: "성장 둔화", tone: "warn" }); }
-  if (rentRank > n - third) { pros.push(`월세가 싼 편이에요 (비싼 순 ${rentRank}번째, 평당 ${st.rent}만원)`); chips.push({ label: "월세 저렴", tone: "good" }); }
-  if (rentRank <= third) { cons.push(`월세가 비싼 편이에요 (비싼 순 ${rentRank}번째, 평당 ${st.rent}만원)`); chips.push({ label: "월세 높음", tone: "warn" }); }
-  if (rC > n - third) { pros.push(`폐업률이 낮아요 (${st.closure}%)`); chips.push({ label: "폐업 적음", tone: "good" }); }
-  if (rC <= third) { cons.push(`폐업률이 높아요 (${st.closure}%)`); chips.push({ label: "폐업 많음", tone: "warn" }); }
-  if (st.netOpen != null && st.netOpen > 0) pros.push(`개업이 폐업보다 많아 가게가 늘고 있어요 (${sign(st.netOpen)}${st.netOpen}%p)`);
+  const prev = growthMeta()?.prev ?? 2024;
+  const warn: Line[] = [], good: Line[] = [];
+  // 매출
+  if (rD <= third) good.push({ tag: "매출 상위", tone: "good", tab: "sales", text: `${B} 한 곳당 월매출이 ${rankWord(rD, n, "높아요", "낮아요")}.` });
+  if (rD > n - third) warn.push({ tag: "매출 하위", tone: "warn", tab: "sales", text: `${B} 한 곳당 월매출이 ${rankWord(rD, n, "높아요", "낮아요")}.` });
+  if (!cafe && st.growth != null && rG <= third && st.growth > 0) good.push({ tag: "성장 중", tone: "good", tab: "sales", text: `${B} 점포당 월매출이 ${prev}년보다 ${st.growth}% 늘었어요. ${rankWord(rG, n, "많이 늘었어요", "적게 늘었어요")}.` });
+  if (!cafe && st.growth != null && (rG > n - third || st.growth < -1.5)) warn.push({ tag: "성장 둔화", tone: "warn", tab: "sales", text: st.growth < 0
+    ? `${B} 점포당 월매출이 ${prev}년보다 ${Math.abs(st.growth)}% 줄었어요. ${rankWord(rG, n, "적게 줄었어요", "많이 줄었어요")}.`
+    : `${B} 점포당 월매출이 ${prev}년보다 ${st.growth}% 늘었지만, ${rankWord(rG, n, "많이 늘었어요", "적게 늘었어요")}.` });
+  // 경쟁
   const compete: GuInsight["compete"] = rP <= third ? "치열" : rP > n - third ? "약함" : "보통";
-  if (compete === "치열") { cons.push(`${iga(T().shop)} 많아요 (${st.pork.toLocaleString("ko-KR")}곳, ${rP}번째)`); chips.push({ label: "경쟁 치열", tone: "warn" }); }
-  if (compete === "약함") { pros.push(`${iga(T().shop)} 적어 경쟁이 덜해요 (${st.pork.toLocaleString("ko-KR")}곳)`); chips.push({ label: "경쟁 약함", tone: "good" }); }
-  if (!pros.length) pros.push("눈에 띄게 좋은 점은 없지만 서울 평균 범위예요");
-  return { pros: pros.slice(0, 3), cons: cons.slice(0, 2), chips: chips.slice(0, 4), compete };
+  const shops = `${iga(S)} ${st.pork.toLocaleString("ko-KR")}곳으로 ${rankWord(rP, n, "많아요", "적어요")}.`;
+  if (compete === "치열") warn.push({ tag: "경쟁 치열", tone: "warn", tab: "comp", text: shops });
+  if (compete === "약함") good.push({ tag: "경쟁 약함", tone: "good", tab: "comp", text: shops });
+  // 비용
+  const rent = `평당 월세 ${st.rent}만원으로 ${rankWord(rentRank, n, "비싸요", "싸요")}.`;
+  if (rentRank <= third) warn.push({ tag: "월세 높음", tone: "warn", tab: "cost", text: rent });
+  if (rentRank > n - third) good.push({ tag: "월세 저렴", tone: "good", tab: "cost", text: rent });
+  // 생존
+  const closed = `${B} 10곳 중 ${(st.closure / 10).toFixed(1)}곳이 1년 안에 문을 닫았어요 (${cafe ? "최근 4분기" : "2025년"}). ${rankWord(rC, n, "많아요", "적어요")}.`;
+  if (rC <= third) warn.push({ tag: "폐업 많음", tone: "warn", tab: "survive", text: closed });
+  if (rC > n - third) good.push({ tag: "폐업 적음", tone: "good", tab: "survive", text: closed });
+  if (st.netOpen != null && st.netOpen > 0) good.push({ tag: "가게 증가", tone: "good", tab: "survive", text: `개업이 폐업보다 많아 ${iga(B)} 늘고 있어요 (${sign(st.netOpen)}${st.netOpen}%p).` });
+  return { summary: { warn: warn.slice(0, 4), good: good.length ? good.slice(0, 3) : [AVERAGE] }, compete };
 }
 
 // 자료를 모듈 변수에 들고 있어서, 이 파일이 핫리로드로 새로 불리면 자료가 비는데 화면은 로딩 완료로 남는다. 통째로 다시 불러 맞춘다.
