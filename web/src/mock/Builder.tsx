@@ -265,7 +265,7 @@ export default function Builder({ profile, store, setStore, levers, setLevers, o
         </div>
       </div>
 
-      <Checks profile={profile} store={store} levers={levers} />
+      <Checks profile={profile} store={store} levers={levers} setStore={setStore} setLevers={setLevers} />
     </main>
   );
 }

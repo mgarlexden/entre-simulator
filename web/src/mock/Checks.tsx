@@ -1,6 +1,8 @@
 // 열기 전 점검, shown under the builder: five questions an owner asks, each answered with a number, what to do about
 // it, and how it was worked out. Status is always a mark plus a word, never colour alone.
 import { useMemo } from "react";
+import CafeFixList from "./CafeFixList";
+import { gogiFixes } from "./gogiFixes";
 import { FOOD_SHARE, STATUS_LABEL, checks, man, settledNet, simulate, storeStats, sunkCost, type Levers, type Profile, type Status, type Store } from "./model";
 
 export function Mark({ s }: { s: Status }) {
@@ -13,11 +15,12 @@ export function Mark({ s }: { s: Status }) {
   );
 }
 
-export default function Checks({ profile, store, levers }: { profile: Profile; store: Store; levers: Levers }) {
-  const { net, list } = useMemo(() => ({
-    net: settledNet(simulate(profile, store, levers, []), store),
-    list: checks(profile, store, levers),
-  }), [profile, store, levers]);
+// setStore·setLevers를 넘기면 주의·취약 카드 아래에 '이렇게 바꾸면'(gogiFixes.ts)과 [적용] 버튼이 나온다.
+export default function Checks({ profile, store, levers, setStore, setLevers }: { profile: Profile; store: Store; levers: Levers; setStore?: (s: Store) => void; setLevers?: (l: Levers) => void }) {
+  const { net, list, fx } = useMemo(() => {
+    const list = checks(profile, store, levers);
+    return { net: settledNet(simulate(profile, store, levers, []), store), list, fx: setStore && setLevers && storeStats(store).seats > 0 ? gogiFixes(profile, store, levers, list) : null };
+  }, [profile, store, levers]); // eslint-disable-line react-hooks/exhaustive-deps
   const stats = storeStats(store);
   const sunk = sunkCost(store, profile.gu, profile.keyMoney ?? 0);
   const headline = stats.seats === 0
@@ -40,6 +43,10 @@ export default function Checks({ profile, store, levers }: { profile: Profile; s
               <h2>{c.title}<span className={`m-status is-${c.status}`}>{STATUS_LABEL[c.status]}</span></h2>
               <p>{c.line}</p>
               {c.todo && <p className="m-todo">{c.todo}</p>}
+              {c.status !== "ok" && fx && setStore && setLevers && (
+                <CafeFixList fixes={fx.by[c.key]} trade={fx.trade[c.key]} none={fx.none.includes(c.key)} settled={net} onApply={(f) => { setStore(f.move.store); setLevers(f.move.levers); }}
+                  noneText="한 가지만 바꿔서는 나아지지 않아요. 위쪽에서 평수를 바꾸거나 동네 분석에서 다른 동네를 골라 보세요." />
+              )}
               {c.rows && (
                 <ul className="m-shockrows">
                   {c.rows.map((r) => <li key={r.label} className={r.ok ? "is-ok" : "is-weak"}><span>{r.label}</span><b>{r.value}</b></li>)}

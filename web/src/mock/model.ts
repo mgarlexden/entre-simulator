@@ -455,6 +455,7 @@ export function checks(profile: Profile, store: Store, lv: Levers): Check[] {
   const want = Math.round(last.demand), need = Math.ceil(be.perDay);
   const bySeat = s.seats * SEAT_TURN, byStaff = (lv.staff + 1) * COVERS_PER_STAFF;
   const cap = Math.round(last.capacity);
+  const got = Math.min(want, cap); // 본전 판정은 올 손님과 받을 수 있는 손님 가운데 작은 쪽으로 한다
   const net = settledNet(mid, store);
   const sunk = sunkCost(store, profile.gu, profile.keyMoney ?? 0);
   const neg = firstNegative(low);
@@ -480,17 +481,17 @@ export function checks(profile: Profile, store: Store, lv: Levers): Check[] {
   }
   if (s.seats > 0 && lv.staff > 0 && lv.staff * COVERS_PER_STAFF >= want * 1.15 && lv.staff * COVERS_PER_STAFF >= Math.min(bySeat, want * 1.15)) {
     fit.status = fit.status === "ok" ? "warn" : fit.status;
-    fit.todo = `직원을 한 명 줄여도 하루 ${Math.round(lv.staff * COVERS_PER_STAFF)}명까지 받을 수 있어요. 한 달에 ${man(STAFF_COST)}을 아껴요.`;
+    fit.todo = `직원을 한 명 줄여도 하루 ${Math.round(Math.min(bySeat, lv.staff * COVERS_PER_STAFF))}명까지 받을 수 있어요. 한 달에 ${man(STAFF_COST)}을 아껴요.`;
   }
   fit.rule = `올 손님 ${want}명은 ${profile.gu} 한식음식점 한 곳의 월매출 ${man(st.sales)}을 손님 한 명 ${PERSON_TICKET.toLocaleString("ko-KR")}원, 한 달 ${OPEN_DAYS}일로 나눈 값이에요(자리 잡힌 6개월째, 가격 반영). 받을 수 있는 손님은 좌석 ${s.seats}석 × 하루 ${SEAT_TURN}번 = ${Math.round(bySeat)}명과, 일하는 사람 ${lv.staff + 1}명 × ${COVERS_PER_STAFF}명 = ${byStaff}명 가운데 작은 쪽이에요. 회전수와 1인당 손님 수는 가정이에요.`;
 
   return [
     {
       key: "breakeven", title: "하루에 몇 명이 와야 본전인가요?",
-      status: want >= need * 1.1 ? "ok" : want >= need ? "warn" : "weak",
-      line: `하루 ${need}명이에요. ${profile.gu}의 비슷한 가게에는 하루 ${want}명쯤 와요.`,
-      todo: want >= need ? undefined : `${need - want}명이 모자라요. 다달이 나가는 돈 ${man(be.fixed)}을 줄여야 해요.`,
-      rule: `다달이 나가는 돈은 ${be.lines.map((l) => `${l.label} ${man(l.amount)}`).join(", ")}로 모두 ${man(be.fixed)}이에요. 손님 한 명이 재료비와 카드 수수료를 빼고 ${Math.round(be.margin).toLocaleString("ko-KR")}원을 남기니, 한 달 ${lv.days}일 영업이면 하루 ${need}명이 와야 0원이 돼요.`,
+      status: got >= need * 1.1 ? "ok" : got >= need ? "warn" : "weak",
+      line: `하루 ${need}명이에요. ${profile.gu}의 비슷한 가게에는 하루 ${want}명쯤 와요.${cap < want ? ` 이 가게는 자리와 일손으로 하루 ${cap}명까지만 받아요.` : ""}`,
+      todo: got >= need ? undefined : cap < want ? `받을 수 있는 손님이 하루 ${cap}명이라 본전보다 ${need - cap}명 적어요. 테이블이나 직원을 늘려야 해요.` : `${need - want}명이 모자라요. 다달이 나가는 돈 ${man(be.fixed)}을 줄여야 해요.`,
+      rule: `다달이 나가는 돈은 ${be.lines.map((l) => `${l.label} ${man(l.amount)}`).join(", ")}로 모두 ${man(be.fixed)}이에요. 손님 한 명이 재료비와 카드 수수료를 빼고 ${Math.round(be.margin).toLocaleString("ko-KR")}원을 남기니, 한 달 ${lv.days}일 영업이면 하루 ${need}명이 와야 0원이 돼요. 올 손님보다 받을 수 있는 손님(아래 '자리와 일손')이 적으면 받을 수 있는 손님으로 판정해요.`,
     },
     fit,
     {

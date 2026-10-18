@@ -10,9 +10,11 @@ import { previewFor, type Preview } from "./useCafePreview";
 import type { Check, Grade, Profile, Status } from "./model";
 
 export type Move = { id: string; label: string; cfg: CafeCfg };
-export type Fix = { move: Move; settled: number; better: string[]; worse: string[] };
-export type Fixes = { by: Record<string, Fix[]>; trade: Record<string, Fix>; none: string[] };
-type Ev = { move: Move; list: Check[]; settled: number };
+// 고르기 규칙(pick)과 화면(CafeFixList.tsx)은 고깃집(gogiFixes.ts)도 같이 쓴다. 바꿀 내용(move)의 모양만 업종마다 다르다.
+export type MoveBase = { id: string; label: string };
+export type Fix<M extends MoveBase = Move> = { move: M; settled: number; better: string[]; worse: string[] };
+export type Fixes<M extends MoveBase = Move> = { by: Record<string, Fix<M>[]>; trade: Record<string, Fix<M>>; none: string[] };
+export type Ev<M extends MoveBase = Move> = { move: M; list: Check[]; settled: number };
 
 const RANK: Record<Status, number> = { weak: 0, warn: 1, ok: 2 };
 export const SHORT: Record<string, string> = { breakeven: "본전", fit: "자리와 일손", range: "한 달 손익", runway: "현금", payback: "회수", shock: "사건" };
@@ -49,7 +51,7 @@ export function movesOf(cfg: CafeCfg, pv: Preview | null): Move[] {
   return out.filter((m) => { const k = JSON.stringify(m.cfg); if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
-export function pick(base: Check[], ev: Ev[]): Fixes {
+export function pick<M extends MoveBase>(base: Check[], ev: Ev<M>[]): Fixes<M> {
   const rank = (l: Check[]) => Object.fromEntries(l.map((c) => [c.key, RANK[c.status]])) as Record<string, number>;
   const b = rank(base), keys = Object.keys(b);
   const scored = ev.map((e) => {
@@ -62,8 +64,8 @@ export function pick(base: Check[], ev: Ev[]): Fixes {
       total: keys.reduce((n, k) => n + (r[k] ?? 0), 0),
     };
   }).filter((x) => x.known);
-  const out: Fixes = { by: {}, trade: {}, none: [] };
-  const toFix = (x: (typeof scored)[number]): Fix => ({ move: x.e.move, settled: x.e.settled, better: x.better.map((k) => SHORT[k] ?? k), worse: x.worse.map((k) => SHORT[k] ?? k) });
+  const out: Fixes<M> = { by: {}, trade: {}, none: [] };
+  const toFix = (x: (typeof scored)[number]): Fix<M> => ({ move: x.e.move, settled: x.e.settled, better: x.better.map((k) => SHORT[k] ?? k), worse: x.worse.map((k) => SHORT[k] ?? k) });
   for (const c of base) {
     if (c.status === "ok") continue;
     const up = scored.filter((x) => x.r[c.key] > b[c.key]);
