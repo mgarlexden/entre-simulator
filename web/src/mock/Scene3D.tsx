@@ -3,7 +3,11 @@
 // that frame the room for any canvas size. Scene frame: room centred on the origin, front (street) wall at +z.
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Environment, Lightformer, OrbitControls, SoftShadows } from "@react-three/drei";
+import { N8AOPass } from "n8ao";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
+import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js";
 import * as THREE from "three";
 import { Box, C } from "../store3d/Building";
 import { Figures, hash, type FigPose } from "../store3d/Figures";
@@ -76,16 +80,45 @@ export function Pendant({ x, z, y = 1.8, color = "#2f3337" }: { x: number; z: nu
   );
 }
 
-// The cafe's light rig, shared so both stores read the same: warm sky, soft fill, one shadow-casting sun from the
-// front-left sized to the room (r = half the span to cover). dim < 1 darkens it (a closed day).
+// The light rig shared by both stores: soft (PCSS) shadows from one warm sun at the front-left sized to the room
+// (r = half the span to cover), a small studio environment of Lightformers for soft reflections (no HDR download),
+// low sky and fill, ambient occlusion and SMAA. dim < 1 darkens it (a closed day).
+// Ambient occlusion (n8ao) as the render pass, then tone mapping/colour space (OutputPass) and SMAA, since hardware
+// antialiasing does not apply once the scene renders through a composer. Takes over R3F's render (priority 1).
+function AO() {
+  const gl = useThree((s) => s.gl), scene = useThree((s) => s.scene), camera = useThree((s) => s.camera), size = useThree((s) => s.size);
+  const composer = useMemo(() => {
+    const c = new EffectComposer(gl);
+    const n8 = new N8AOPass(scene, camera, size.width, size.height);
+    n8.configuration.aoRadius = 0.9;
+    n8.configuration.distanceFalloff = 0.6;
+    n8.configuration.intensity = 3;
+    n8.configuration.gammaCorrection = false;
+    c.addPass(n8);
+    c.addPass(new OutputPass());
+    c.addPass(new SMAAPass());
+    return c;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gl, scene, camera]);
+  useLayoutEffect(() => composer.setSize(size.width, size.height), [composer, size]);
+  useFrame(() => composer.render(), 1);
+  return null;
+}
 export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: number; dim?: number }) {
   return (
     <>
       <color attach="background" args={["#e9eef6"]} />
-      <hemisphereLight args={["#fff7ea", "#c9c2b6", 0.75 * dim]} />
-      <ambientLight intensity={0.45 * dim} />
-      <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.5 * dim} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
+      <SoftShadows size={22} samples={14} focus={0.4} />
+      <Environment resolution={128} frames={1} environmentIntensity={dim}>
+        <Lightformer intensity={1.1} position={[0, 8, 0]} rotation-x={Math.PI / 2} scale={[14, 14, 1]} color="#fff4e4" />
+        <Lightformer intensity={0.7} position={[-8, 3, 6]} rotation-y={Math.PI / 4} scale={[8, 3, 1]} color="#ffe2c0" />
+        <Lightformer intensity={0.45} position={[8, 3, -6]} rotation-y={-Math.PI / 3} scale={[8, 3, 1]} color="#dfe8ff" />
+      </Environment>
+      <hemisphereLight args={["#fff7ea", "#c9c2b6", 0.35 * dim]} />
+      <ambientLight intensity={0.12 * dim} />
+      <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.9 * dim} color="#fff0dc" castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
         shadow-camera-left={-r} shadow-camera-right={r} shadow-camera-top={r} shadow-camera-bottom={-r} shadow-camera-far={40} />
+      <AO />
     </>
   );
 }
