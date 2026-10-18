@@ -1,11 +1,12 @@
 // #/sources: operator page. Where every number on the mock comes from and how far it can be trusted.
 // Keep this file in step with model.ts: a constant added there gets a row here.
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CATALOG, GRADES, man, type GuData } from "./model";
 import SourcesCafe from "./SourcesCafe";
 import SourcesGogi from "./SourcesGogi";
 import SourcesChanges from "./SourcesChanges";
 import SourcesTodo from "./SourcesTodo";
+import Fold from "./Fold";
 import "./sources.css";
 
 type Kind = "실측" | "차용" | "가정" | "예시값";
@@ -228,8 +229,38 @@ export default function Sources() {
   const count = (k: Kind) => all.filter((r) => r.kind === k).length;
   const gus = d ? Object.entries(d.bbq.gu).sort((a, b) => b[1].sales_per_store_month - a[1].sales_per_store_month) : [];
 
+  // 목차와 검색. 화면에 나온 섹션(h2)과 표 행을 DOM에서 읽어 처리한다. 탭 안의 자식 컴포넌트가 그린 것도 잡기 위해서다.
+  const root = useRef<HTMLElement>(null);
+  const [q, setQ] = useState("");
+  const [toc, setToc] = useState<{ id: string; text: string }[]>([]);
+  const [hits, setHits] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const heads = [...el.querySelectorAll<HTMLHeadingElement>("h2")];
+    heads.forEach((h, i) => { if (!h.id) h.id = `sec-${tab}-${i}`; });
+    setToc(heads.map((h) => ({ id: h.id, text: h.textContent ?? "" })));
+    const needle = q.trim().toLowerCase();
+    // 검색 중에는 접힌 섹션도 펼쳐서 일치하는 행이 보이게 한다
+    if (needle) el.querySelectorAll("details").forEach((x) => { x.open = true; });
+    let shown = 0;
+    el.querySelectorAll<HTMLTableElement>("table").forEach((t) => {
+      const rows = [...t.querySelectorAll<HTMLTableRowElement>("tbody tr")];
+      if (rows.length === 0) return;
+      let visible = 0;
+      rows.forEach((r) => {
+        const ok = !needle || (r.textContent ?? "").toLowerCase().includes(needle);
+        r.hidden = !ok;
+        if (ok) visible += 1;
+      });
+      t.hidden = needle !== "" && visible === 0;
+      shown += visible;
+    });
+    setHits(needle ? shown : null);
+  }, [tab, d, audit, q]);
+
   return (
-    <main className="src">
+    <main className="src" ref={root}>
       <p><a href="#/">ChangeUp 목업으로 돌아가기</a></p>
       <h1>출처와 근거 (운영자용)</h1>
       <p>화면에 나오는 숫자가 어디서 왔고 얼마나 믿을 수 있는지 적은 장부입니다. 업종별로 나눴습니다. 계산식은 <code>web/src/mock/model.ts</code>와
@@ -243,13 +274,24 @@ export default function Sources() {
       </div>
       <p className="src-sub">{tab === "todo" ? "아직 하지 않은 일입니다. 담당과 함께 적었습니다." : tab === "log" ? "2026-10-16 하루 동안 바뀐 것입니다. 어떤 값과 화면이 바뀌었는지, 데이터 갭을 어떤 출처로 채웠는지, 아직 못 채운 것을 적었습니다." : tab === "gogi" ? "이 서비스의 화면이 실제로 쓰는 값입니다. 데이터 출처, 탭별 출처, 시뮬레이션 변수, 충분성 검토 순서입니다." : "카페는 아직 화면이 없습니다. 건희 레포의 카페 브랜치가 쓴 데이터, 그 갭, 팀원이 채운 것과 남은 것을 모았습니다."}</p>
 
+      <div className="src-find">
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="찾을 말 (예: 월세, 카페, 가정)" aria-label="출처 검색" />
+        {hits !== null && <span className="src-hits" aria-live="polite">{hits === 0 ? "일치하는 행이 없어요" : `일치하는 행 ${hits}개`}</span>}
+      </div>
+      {toc.length > 0 && (
+        <nav className="src-toc" aria-label="목차">
+          <b>목차</b>
+          <ol>{toc.map((s, i) => <li key={i}><a href={`#${s.id}`}>{s.text}</a></li>)}</ol>
+        </nav>
+      )}
+
       {tab === "todo" ? <SourcesTodo /> : tab === "log" ? <SourcesChanges /> : tab === "cafe" ? <SourcesCafe /> : (
         <>
           <SourcesGogi />
           <h2 id="g-appendix">부록: 기존 장부</h2>
           <p>아래는 이 페이지를 나누기 전에 쌓아 온 기록입니다. 결정은 날짜순으로 쌓고, 값 표는 화면에 나오는 숫자 단위로 나눴습니다.</p>
 
-      <h2>결정 사항</h2>
+      <Fold title="결정 사항">
       <p>정해진 것과 보류한 것을 날짜와 함께 남깁니다. 아래 "보류한 데이터"는 현재 값이 없어 대체값으로 동작하는 항목입니다.</p>
       <table>
         <thead><tr><th>날짜</th><th>주제</th><th>결정</th><th>이유</th><th>적용 위치</th><th>상태</th></tr></thead>
@@ -261,7 +303,9 @@ export default function Sources() {
         </tbody>
       </table>
 
-      <h2>보류한 데이터 (5개)</h2>
+      </Fold>
+
+      <Fold title="보류한 데이터 (5개)">
       <p><b>미탐색</b>은 아직 찾아보지 않은 것, <b>탐색했으나 값 없음</b>은 찾아봤지만 공개된 값이 없어 범위로 다루는 것입니다. 현재 5개는 모두 후자입니다.</p>
       <table>
         <thead><tr><th>데이터</th><th>구분</th><th>왜 비어 있나</th><th>쓰는 탭·기능</th><th>지금 처리</th><th>찾을 곳</th></tr></thead>
@@ -272,7 +316,9 @@ export default function Sources() {
         </tbody>
       </table>
 
-      <h2>구분</h2>
+      </Fold>
+
+      <Fold title="구분">
       <table>
         <thead><tr><th>구분</th><th>뜻</th><th>항목 수</th></tr></thead>
         <tbody>
@@ -280,7 +326,9 @@ export default function Sources() {
         </tbody>
       </table>
 
-      <h2>화면의 숫자</h2>
+      </Fold>
+
+      <Fold title="화면의 숫자">
       {groups.map((g) => (
         <section key={g.title}>
           <h3>{g.title}</h3>
@@ -293,7 +341,9 @@ export default function Sources() {
         </section>
       ))}
 
-      <h2>API 키별 연결 (2026-10-15 호출 확인)</h2>
+      </Fold>
+
+      <Fold title="API 키별 연결 (2026-10-15 호출 확인)">
       <p>키 값은 저장소에 없고 <code>changup-sim/.env</code>에만 있습니다. 아래는 각 키로 무엇을 받을 수 있고 어느 탭의 어떤 기능에 쓰는지입니다.</p>
       <table>
         <thead><tr><th>환경변수</th><th>서비스</th><th>상태</th><th>받는 것</th><th>쓰는 탭·기능</th><th>현재 적용</th><th>주의</th></tr></thead>
@@ -308,9 +358,11 @@ export default function Sources() {
         <p>연결된 서울시 자료: {d._meta.year}년 {d._meta.quarters.length}개 분기, {d._meta.generated} 생성, {d._meta.license}. 다시 만들기: <code>python -m pipelines.build_gu_stats --refresh</code>. 주의: {d._meta.caveats.join(" / ")}.</p>
       )}
 
+      </Fold>
+
       {audit && (
         <>
-          <h2>팀 리서치 자료와 대조 ({audit.generated})</h2>
+          <Fold title={`팀 리서치 자료와 대조 (${audit.generated})`}>
           <p>카페 팀과 고깃집 팀이 보낸 파일 4개를 현재 시스템의 항목과 나란히 놓았습니다. <b>아직 계산에 적용하지 않았습니다.</b> 무엇을 채울 수 있고 무엇이 남는지, 그리고 어느 탭의 어떤 기능에 쓰이는지를 적은 표입니다. 값은 팀 자료에 적힌 그대로이며 원 출처(KREI 보고서, 서울시 보고서)는 직접 열어 확인하지 않았습니다.</p>
           <table>
             <thead><tr><th>파일</th><th>보낸 팀</th><th>날짜</th><th>내용</th><th>범위와 주의</th></tr></thead>
@@ -352,10 +404,11 @@ export default function Sources() {
             <thead><tr><th>항목</th><th>값</th><th>자료</th></tr></thead>
             <tbody>{audit.cafe.map((c, i) => <tr key={i}><td>{c.item}</td><td>{c.value}</td><td>{c.src}</td></tr>)}</tbody>
           </table>
+          </Fold>
         </>
       )}
 
-      <h2>기존 레포에서 가져오지 않은 것</h2>
+      <Fold title="기존 레포에서 가져오지 않은 것">
       <ul>
         <li>시뮬 엔진 (<code>sim/</code>): 손님 도착, 대기, 좌석 배정을 계산하는 엔진과 6개월 시즌 엔진. 목업은 단순 월별 식을 씀.</li>
         <li>대학로 4개 상권 자료 (<code>data/processed/</code>): 매출, 점포, 유동인구, 직장인구, 거주인구, 집객시설, 인허가 매칭, 생존 분석.</li>
@@ -363,7 +416,9 @@ export default function Sources() {
         <li>사건 목록 (<code>research/shocks.yaml</code>, <code>events.yaml</code>, <code>calendar.yaml</code>): 월별 수요 지수와 사건 크기.</li>
       </ul>
 
-      <h2>구별 값 (한식음식점, 상권 안)</h2>
+      </Fold>
+
+      <Fold title="구별 값 (한식음식점, 상권 안)">
       {gus.length === 0 ? <p>gu_stats.json을 읽지 못했습니다.</p> : (
         <table className="num">
           <thead><tr><th>구</th><th>상권 수</th><th>점포 수</th><th>점포당 월매출</th><th>하루 결제</th><th>결제 1건</th><th>저녁 비중</th><th>주말 비중</th><th>1년 폐업률</th><th>1년 개업률</th><th>매출 지수</th></tr></thead>
@@ -375,6 +430,7 @@ export default function Sources() {
           </tbody>
         </table>
       )}
+      </Fold>
         </>
       )}
     </main>

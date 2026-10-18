@@ -36,7 +36,9 @@ type MonthResult = {
 };
 type Tick = { label: string; amount: number }; // 원
 type Day = { n: number; date: Date; open: boolean; covers: number; rain: boolean; revenue: number; ticks: Tick[]; notes: string[]; net: number; cash: number };
-type Done = { result: MonthResult; plan: Plan; days: Day[]; cashStart: number; cashEnd: number; year: number };
+type Done = { result: MonthResult; plan: Plan; days: Day[]; cashStart: number; cashEnd: number; year: number; picked: Record<string, string> };
+// 고르지 않은 대응을 골랐다면: 같은 달을 그 대응으로 한 번 더 계산한 결과 (고른 뒤에만 계산한다)
+type Alt = { label: string; month_op: number; op_gap: number; revenue: number; night_revenue: number; night_covers: number };
 type Ledger = {
   rows: { month: number; op: number; cash_op: number; interest: number; net: number; cash: number; cum_recovered: number }[];
   start_cash: number; end_cash: number; lowest_cash: number; lowest_month: number; spent: number; deposit: number;
@@ -205,20 +207,29 @@ function Guests({ store, filled }: { store: Store; filled: number }) {
 }
 
 const ico = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true } as const;
-const IconCash = () => <svg {...ico}><rect x="2.5" y="6" width="19" height="12" rx="1.5" /><circle cx="12" cy="12" r="2.8" /><path d="M6 9.5v.01M18 14.5v.01" /></svg>;
-const IconCal = () => <svg {...ico}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
-const IconStar = () => <svg {...ico}><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" /></svg>;
-const IconHeart = () => <svg {...ico}><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10C19.5 15.4 12 20 12 20z" /></svg>;
-const IconBattery = ({ level }: { level: number }) => (
+export const IconCash = () => <svg {...ico}><rect x="2.5" y="6" width="19" height="12" rx="1.5" /><circle cx="12" cy="12" r="2.8" /><path d="M6 9.5v.01M18 14.5v.01" /></svg>;
+export const IconCal = () => <svg {...ico}><rect x="3.5" y="5" width="17" height="15" rx="2" /><path d="M3.5 10h17M8 3v4M16 3v4" /></svg>;
+export const IconStar = () => <svg {...ico}><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" /></svg>;
+export const IconHeart = () => <svg {...ico}><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10C19.5 15.4 12 20 12 20z" /></svg>;
+export const IconBattery = ({ level }: { level: number }) => (
   <svg {...ico}><rect x="2.5" y="7.5" width="16" height="9" rx="2" /><path d="M21 10.5v3" /><rect x="4.5" y="9.5" width={Math.max(0.5, 12 * (1 - level / 100))} height="5" rx="0.8" fill="currentColor" stroke="none" /></svg>
 );
 
-function Metric({ icon, label, children, tip }: { icon: ReactNode; label: string; children: ReactNode; tip: ReactNode }) {
+// ? 아이콘. 누르거나 올리면 설명 상자가 뜬다. 설명을 빼면 아이콘만 보인다.
+export function Q({ children }: { children?: ReactNode }) {
+  return (
+    <span className="sx-q" tabIndex={0} aria-label="설명 보기">
+      ?
+      {children ? <span className="sx-q-body" role="tooltip">{children}</span> : null}
+    </span>
+  );
+}
+
+export function Metric({ icon, label, children, tip }:{ icon: ReactNode; label: string; children: ReactNode; tip: ReactNode }) {
   return (
     <div className="sx-metric" tabIndex={0}>
       <span className="sx-ico">{icon}</span>
-      <span className="sx-mt"><span className="sx-k">{label}</span><b>{children}</b></span>
-      <span className="sx-tip" role="tooltip">{tip}</span>
+      <span className="sx-mt"><span className="sx-k">{label}<Q>{tip}</Q></span><b>{children}</b></span>
     </div>
   );
 }
@@ -305,9 +316,11 @@ function Kpis({ items }: { items: { label: string; value: string; tone?: string;
   );
 }
 
-function DecisionCard({ d }: { d: Decision }) {
+function DecisionCard({ d, alts, busy, onTry }: { d: Decision; alts: Record<string, Alt>; busy: boolean; onTry: (dp: string, opt: string) => void }) {
   const same = d.chosen === d.default;
   const st = Object.entries(d.state || {}).filter(([k, x]) => STATE_KO[k] && Math.abs(x) > 1e-9);
+  const [pick, setPick] = useState<string | null>(null);
+  const alt = pick ? alts[`${d.id}:${pick}`] : undefined;
   return (
     <article className="sx-dres">
       <header>
@@ -318,13 +331,33 @@ function DecisionCard({ d }: { d: Decision }) {
       <dl className="sx-dres-nums">
         <div><dt>그 밤 매출</dt><dd className={tone(d.night.revenue)}>{signedMan(d.night.revenue)}</dd></div>
         <div><dt>그 밤 손님</dt><dd className={tone(d.night.covers)}>{d.night.covers > 0 ? "+" : d.night.covers < 0 ? "−" : ""}{Math.abs(Math.round(d.night.covers))}명</dd></div>
-        <div className="main"><dt>이달 영업이익</dt><dd className={tone(d.month_op)}>{signedMan(d.month_op)}</dd></div>
+        <div className="main"><dt>이달 영업이익<Q>이런 밤이 한 달에 {d.count}번 있다고 보고(가정) 이달 값에 곱했어요.</Q></dt><dd className={tone(d.month_op)}>{signedMan(d.month_op)}</dd></div>
       </dl>
       {st.length > 0 && <p className="sx-dres-state">{st.map(([k, x]) => <span key={k} className={`sx-chip ${tone(k === "fatigue" ? -x : x)}`}>{STATE_KO[k](x)}</span>)}</p>}
       <p className="sx-dres-vs">
         {same ? "기본 대응을 골랐어요." : <>기본 대응(<b>{d.default_label}</b>)을 골랐다면보다 이달 영업이익 <b className={tone(d.vs_default_op)}>{signedMan(d.vs_default_op)}</b></>}
       </p>
-      <small>이 일이 없던 같은 밤과 비교한 값이에요. 이런 밤이 한 달에 {d.count}번 있다고 보고(가정) 이달 값에 곱했어요.</small>
+      <div className="sx-alt">
+        <p className="sx-alt-h">다른 대응을 골랐다면</p>
+        <div className="sx-alt-btns">
+          {d.options.filter((o) => o.id !== d.chosen).map((o) => (
+            <button key={o.id} type="button" className={pick === o.id ? "on" : ""} disabled={busy}
+              onClick={() => { setPick(o.id); if (!alts[`${d.id}:${o.id}`]) onTry(d.id, o.id); }}>{o.label}</button>
+          ))}
+        </div>
+        {pick && !alt && <p className="sx-note">{busy ? "그 대응으로 이달을 다시 계산하는 중이에요…" : "계산하지 못했어요."}</p>}
+        {alt && (
+          <div className="sx-alt-res">
+            <p><b>{alt.label}</b>을 골랐다면 이 달은 이렇게 됐을 거예요.</p>
+            <dl className="sx-dres-nums">
+              <div><dt>그 밤 매출</dt><dd className={tone(alt.night_revenue)}>{signedMan(alt.night_revenue)}</dd></div>
+              <div><dt>그 밤 손님</dt><dd className={tone(alt.night_covers)}>{alt.night_covers > 0 ? "+" : alt.night_covers < 0 ? "−" : ""}{Math.abs(Math.round(alt.night_covers))}명</dd></div>
+              <div className="main"><dt>이달 영업이익</dt><dd className={tone(alt.month_op)}>{signedMan(alt.month_op)}</dd></div>
+            </dl>
+            <p className="sx-dres-vs">지금 선택({d.chosen_label})보다 이달 영업이익 <b className={tone(alt.op_gap)}>{signedMan(alt.op_gap)}</b></p>
+          </div>
+        )}
+      </div>
     </article>
   );
 }
@@ -357,6 +390,8 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
   const [playing, setPlaying] = useState(false);
   const [fast, setFast] = useState(false);
   const [ledger, setLedger] = useState<Ledger | null>(null);
+  const [alts, setAlts] = useState<Record<string, Alt>>({});
+  const [altBusy, setAltBusy] = useState(false);
   const [receipt, setReceipt] = useState(true);
   const [chartOpen, setChartOpen] = useState(true);
   const [top, setTop] = useState(108);
@@ -429,6 +464,27 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
     } catch (e) { setErr(String(e)); setBusy(false); }
   };
 
+  // 고르지 않은 대응 하나를 골랐다면: 이 달의 이전 상태에서 그 대응만 바꿔 같은 달을 다시 계산한다 (저장하지 않음)
+  const tryAlt = async (dp: string, opt: string) => {
+    const idx = done.length - 1;
+    const cur = done[idx];
+    const pre = states.current[idx];
+    if (!cur || !pre) return;
+    const key = `${dp}:${opt}`;
+    setAltBusy(true); setErr("");
+    try {
+      const out = await post("/season/play", { state: pre, plan: cur.plan, store: spec(), night: true, night_choices: { ...cur.picked, [dp]: opt }, band_runs: 20 });
+      const d: Decision | undefined = out.result.decisions.find((x: Decision) => x.id === dp);
+      if (!d) throw new Error("선택한 대응의 결과가 없어요");
+      const r: MonthResult = out.result;
+      setAlts((a) => ({ ...a, [key]: {
+        label: d.chosen_label, month_op: r.kpis.op, op_gap: r.kpis.op - cur.result.kpis.op, revenue: r.kpis.revenue,
+        night_revenue: d.night.revenue, night_covers: d.night.covers,
+      } }));
+    } catch (e) { setErr(String(e)); }
+    setAltBusy(false);
+  };
+
   const playMonth = async (picked: Record<string, string>) => {
     if (!engineState) return;
     setErr(""); setBusy(true);
@@ -438,8 +494,9 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
       const idx = done.length;
       const cs = cashAtStart.current[idx];
       const days = buildDays(result, cs, yearOf(idx), { imputed, draw, interest });
-      const entry: Done = { result, plan, days, cashStart: cs, cashEnd: days.at(-1)?.cash ?? cs, year: yearOf(idx) };
+      const entry: Done = { result, plan, days, cashStart: cs, cashEnd: days.at(-1)?.cash ?? cs, year: yearOf(idx), picked };
       setDone((d) => [...d, entry]);
+      setAlts({});
       setEngineState(out.state);
       states.current[idx + 1] = out.state;
       cashAtStart.current[idx + 1] = entry.cashEnd;
@@ -799,7 +856,8 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
                     {r.decisions.length > 0 && (
                       <section className="sx-sec">
                         <h2>내 선택의 결과</h2>
-                        <div className="sx-dres-grid">{r.decisions.map((x) => <DecisionCard key={x.id} d={x} />)}</div>
+                        <p className="sx-note">각 밤은 그 일이 없던 같은 밤과 비교한 값이에요. 한 달에 몇 번 있는지는 가정이고, 이달 영업이익 옆 <Q />에서 볼 수 있어요.</p>
+                        <div className="sx-dres-grid">{r.decisions.map((x) => <DecisionCard key={x.id} d={x} alts={alts} busy={altBusy} onTry={tryAlt} />)}</div>
                       </section>
                     )}
 

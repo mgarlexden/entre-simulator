@@ -2,6 +2,7 @@
 // 팀원 파일 두 개가 채운 것과 남은 것을 한 곳에 모은다. 갭 목록은 pipelines/build_sources_cafe.py 가 만든
 // web/public/mock/sources_cafe.json 에서 읽는다 (값은 원 파일 그대로, 반영 여부만 건희 params.yaml 과 비교한 결과).
 import { useEffect, useState } from "react";
+import Fold from "./Fold";
 
 type Weak = { value: string; state: string; applied: string; note: string } | null;
 type Q22 = { applied: string; value: string; note: string } | null;
@@ -127,12 +128,14 @@ export default function SourcesCafe() {
       <p>카페는 <b>건희 레포의 카페 브랜치</b>가 만든 값이 기준입니다. 이 서비스의 카페 화면은 아직 만들지 않았고(고깃집 설계가 끝난 뒤 시작),
         여기서는 데이터가 어디서 왔고 무엇이 비어 있는지만 정리합니다. 값과 출처는 건희 파일에 적힌 그대로이며 원 출처를 직접 열어 확인하지는 않았습니다.</p>
 
-      <h2 id="c-fresh">1. 건희 레포 카페 브랜치 (2026-10-15 다시 fetch)</h2>
+      <Fold id="c-fresh" title="1. 건희 레포 카페 브랜치 (2026-10-15 다시 fetch)">
       <p><code>git fetch --all</code> 결과 이전 확인 때와 달라진 브랜치와 새 커밋은 없었습니다. 아래 최신 커밋이 현재 기준입니다.
         갭 정리표는 10-14 01:14에 만들었고 그 뒤 10-14 오후에 건희가 카페 L 행을 다시 조사해 카페 68개 행의 H·M 등급이 19개에서 39개로 늘었기 때문에, 이 페이지는 <b>그 이후 값과 다시 대조</b>한 결과입니다.</p>
       <Branches />
 
-      <h2 id="c-sources">2. 건희 카페 브랜치가 쓴 데이터 출처</h2>
+      </Fold>
+
+      <Fold id="c-sources" title="2. 건희 카페 브랜치가 쓴 데이터 출처">
       <p>research/cafe/params.yaml, districts.yaml, docs/CAFE.md, docs/CHANGEUP-PARAMS.md에 적힌 출처를 모았습니다. 등급은 건희의 기준(H 공식·원자료 / M 업계 자료·여러 판매처 일치 / L 사례 1건·자체 계산 / 가정 출처 없음)입니다.</p>
       <table>
         <thead><tr><th>출처</th><th>종류</th><th>가져온 방법</th><th>쓰인 값</th><th>등급</th></tr></thead>
@@ -141,7 +144,9 @@ export default function SourcesCafe() {
         ))}</tbody>
       </table>
 
-      <h2 id="c-gaps">3. 건희 데이터의 갭 (보강이 필요한 데이터)</h2>
+      </Fold>
+
+      <Fold id="c-gaps" title="3. 건희 데이터의 갭 (보강이 필요한 데이터)">
       {!d ? <p>sources_cafe.json을 읽지 못했습니다.</p> : (
         <>
           <p>건희 변수 183개 중 근거가 약하거나 없어 보강이 필요한 <b>갭 {g.length}개</b>를 대상으로 했습니다 (갭 정리표 3번 시트).
@@ -168,7 +173,9 @@ export default function SourcesCafe() {
         </>
       )}
 
-      <h2 id="c-filled">4. 팀원이 채워 준 것</h2>
+      </Fold>
+
+      <Fold id="c-filled" title="4. 팀원이 채워 준 것">
       <table>
         <thead><tr><th>파일</th><th>작성</th><th>누가</th><th>내용</th></tr></thead>
         <tbody>{[...FILES, V6_FILE].map((f) => <tr key={f.id}><td><code>{f.id}</code></td><td>{f.date}</td><td>{f.who}</td><td>{f.what}</td></tr>)}</tbody>
@@ -190,7 +197,9 @@ export default function SourcesCafe() {
         </>
       )}
 
-      <h2 id="c-remain">5. 아직 남은 정보</h2>
+      </Fold>
+
+      <Fold id="c-remain" title="5. 아직 남은 정보">
       {d && (
         <>
           <p>가정 또는 L로 남은 갭 {remain("상권·입지").length + remain("매장 운영").length + remain("그 외").length}개를 세 묶음으로 나눴습니다.
@@ -220,7 +229,9 @@ export default function SourcesCafe() {
         </>
       )}
 
-      <h2 id="c-summary">6. 요약: 카페를 고깃집과 같은 구조로 구현할 수 있나</h2>
+      </Fold>
+
+      <Fold id="c-summary" title="6. 요약: 카페를 고깃집과 같은 구조로 구현할 수 있나">
       <p><b>동네 분석, 드는 돈, 열기 전 점검은 데이터가 충분해졌고, 시뮬레이션만 아직 비교용입니다.</b> 변수 구조는 건희 엔진에 모두 있고,
         2026-10-16에 Drive의 v6 엑셀(독립 카페만 계산한 값, 서울 425개 행정동 지표)이 들어오면서 개인 카페 기준값이 채워졌습니다. 상세는 7장입니다.</p>
       <table>
@@ -261,7 +272,9 @@ export default function SourcesCafe() {
         </tbody>
       </table>
 
-      <h2 id="c-drive">7. Drive 자료 반영: 카페 데이터 구축 현황 (2026-10-16)</h2>
+      </Fold>
+
+      <Fold id="c-drive" title="7. Drive 자료 반영: 카페 데이터 구축 현황 (2026-10-16)">
       <p>Drive 폴더 <b>카페_자료 모음</b>과 Claude 아티팩트 '서울 카페 상권 리서치'를 검토해 카페용 데이터 묶음을 만들었습니다.
         고깃집의 <code>gu_stats.json</code>, <code>dong_stats.json</code>, <code>kosis_food.json</code>에 해당하는 파일이 카페에도 생겼습니다.</p>
 
@@ -331,6 +344,7 @@ export default function SourcesCafe() {
           <tr><td>5</td><td>인터뷰와 범위 처리 대상(단골, 별점, 고장, 마케팅 등 시뮬 가정) 정리</td><td>시뮬 숫자를 비교용에서 범위로 보여 주는 수준으로</td></tr>
         </tbody>
       </table>
+      </Fold>
     </>
   );
 }

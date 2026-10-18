@@ -246,6 +246,31 @@ season:   # step 3 월별 운영 (sim/cafe/season.py). Every effect size here is
   viral_marketing_boost: {value: 2.0, grade: 가정, source: "none", note: "마케팅 효과가 최대일 때 확률 배수 (1 + 이 값 x 효과 비율)"}
   viral_demand_mult: {value: 1.3, grade: 가정, source: "none", note: "화제가 된 달 손님 30% 증가"}
   viral_carry_mult: {value: 1.1, grade: 가정, source: "none", note: "다음 달에 남는 효과"}
+  scenario_points:
+    grade: 가정
+    source: "none"
+    note: "매달 두 가지 상황에서 사장님이 대응을 고름 (고깃집의 '토요일 밤 대응'에 해당). 효과 크기는 모두 가정이고 한 달 합계에 한 번 적용. walk_recover = 돌아가는 손님 중 붙잡는 비율, demand_mult = 그달 손님 배수, ticket_mult = 객단가 배수, cost_krw = 그달 비용"
+    value:
+      - id: peak_line
+        clock: "토·일 14시"
+        title: "주말 오후, 줄이 문 밖까지 길어요"
+        prompt: "주문이 몰려 기다리다 돌아가는 손님이 생겨요."
+        count: 8
+        default: hold
+        options:
+          - {id: hold, label: "그대로 둔다", hint: "비용이 들지 않아요.", downside: "돌아가는 손님은 그대로예요.", walk_recover: 0.0, cost_krw: 0}
+          - {id: extra_hand, label: "임시 아르바이트를 부른다", hint: "돌아가는 손님의 30%를 붙잡아요.", downside: "주말 8일 알바비 48만원이 들어요.", walk_recover: 0.30, cost_krw: 480000}
+          - {id: preorder, label: "번호표와 모바일 선주문으로 나눈다", hint: "돌아가는 손님의 12%를 붙잡아요.", downside: "선주문 수수료로 객단가가 1% 줄어요.", walk_recover: 0.12, ticket_mult: 0.99}
+      - id: slow_noon
+        clock: "평일 14시"
+        title: "평일 낮, 손님이 뜸해요"
+        prompt: "의자가 반쯤 비어 있어요."
+        count: 18
+        default: hold
+        options:
+          - {id: hold, label: "그대로 둔다", hint: "비용이 들지 않아요.", downside: "한가한 시간은 그대로예요.", demand_mult: 1.0, cost_krw: 0}
+          - {id: coupon, label: "낮 시간 쿠폰을 뿌린다", hint: "그달 손님이 4% 늘어요.", downside: "쿠폰 비용 10만원, 객단가 3% 줄어요.", demand_mult: 1.04, ticket_mult: 0.97, cost_krw: 100000}
+          - {id: study, label: "작업·공부 좌석으로 알린다", hint: "그달 손님이 3% 늘어요.", downside: "음료 한 잔으로 오래 앉아 객단가가 2% 줄어요.", demand_mult: 1.03, ticket_mult: 0.98}
 
 defaults:
   own_capital_krw: 80000000
