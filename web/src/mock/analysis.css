@@ -187,6 +187,7 @@
 .a-rec-none { font-size: 14px; color: var(--lx-ink2); }
 
 @media (hover: hover) {
+  .t-toggle:hover { background: var(--lx-wash); }
   .a-cta:hover { background: var(--blue-deep); } .a-back:hover { background: #dfe7fd; }
   .a-ktab:hover, .a-rec-item:hover { border-color: var(--lx-ring); }
   .a-rec-btn:hover { background: var(--lx-wash); }
@@ -205,3 +206,48 @@
 /* 창이 낮아도 왼쪽 지도 카드의 아래쪽(범례·버튼)이 잘리지 않게: 화면보다 크면 카드 안에서 스크롤 */
 .m-mapcol.a-card { max-block-size: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; }
 .c-more { justify-self: start; font-size: 14px; }
+
+/* 동 안 상권 추천 (DongTrdar.tsx) */
+.t-sec { display: grid; border: 2px solid var(--lx-deep); border-radius: 24px; background: #fff; overflow: hidden; }
+.t-toggle { display: flex; align-items: center; gap: 16px; inline-size: 100%; padding: 20px 28px; border: 0; background: none; text-align: start; font: inherit; color: inherit; cursor: pointer; }
+.t-toggle-text { flex: 1; min-inline-size: 0; display: grid; gap: 8px; }
+.t-title { font-size: 22px; font-weight: 700; }
+.t-toggle small { font-size: 14px; color: var(--lx-ink2); }
+.t-toggle > svg { flex: none; color: var(--lx-deep); transition: transform 160ms ease-out; }
+.t-sec.is-open .t-toggle > svg { transform: rotate(90deg); }
+.t-peek { display: flex; flex-wrap: wrap; gap: 6px; }
+.t-peek .t-badge { font-size: 13px; }
+.t-badge.is-성장 { background: var(--lx); color: #fff; }
+.t-badge.is-안정 { background: var(--good-bg); color: var(--good-fg); }
+.t-badge.is-조심 { background: var(--warn-bg); color: var(--warn-fg); }
+.t-body { display: grid; gap: 18px; padding: 0 28px 26px; container-type: inline-size; }
+.t-sub { font-size: 15px; color: var(--lx-ink2); }
+.t-cards { display: grid; gap: 12px; }
+.t-card { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border: 2px solid transparent; border-radius: 20px; background: #f6f7fa; }
+.t-card.is-성장 { border-color: var(--lx); background: var(--lx-wash); }
+.t-card.is-조심 { border: 2px dashed #e0b3a8; background: #fff; }
+.t-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--lx-ink2); }
+.t-badge { padding: 3px 10px; border-radius: 999px; font-weight: 700; }
+.is-성장 .t-badge { background: var(--lx); color: #fff; }
+.is-안정 .t-badge { background: var(--good-bg); color: var(--good-fg); }
+.is-조심 .t-badge { background: var(--warn-bg); color: var(--warn-fg); }
+.t-card h3 { font-size: 19px; font-weight: 700; }
+.t-card.is-성장 h3 { color: var(--lx-deep); }
+.t-card > p { font-size: 15px; line-height: 1.5; }
+.t-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.t-stats > div { display: grid; gap: 2px; padding: 9px 10px; border-radius: 12px; background: #fff; }
+.is-조심 .t-stats > div { background: #f6f7fa; }
+.t-stats span { font-size: 12px; color: var(--lx-pencil); }
+.t-stats b { font-size: 16px; font-weight: 700; white-space: nowrap; }
+.t-stats b.is-up { color: #1d6b3a; }
+.t-stats b.is-down { color: #b3261e; }
+.t-warn { font-size: 14px; line-height: 1.5; color: var(--warn-fg); }
+.t-more { justify-self: start; font-size: 15px; }
+.t-foot { font-size: 13px; line-height: 1.6; color: var(--lx-pencil); }
+@media (max-width: 600px) { .t-toggle { padding: 16px; } .t-body { padding: 0 16px 20px; } .t-title { font-size: 19px; } }
+/* 넓으면 한 상권 = 가로 한 줄: 왼쪽 라벨·이름·설명·주의, 오른쪽 숫자 4칸 */
+@container (min-width: 620px) {
+  .t-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); grid-template-areas: "top stats" "name stats" "why stats" "warn stats"; grid-template-rows: auto auto auto 1fr; align-items: start; column-gap: 20px; row-gap: 6px; }
+  .t-top { grid-area: top; } .t-card h3 { grid-area: name; } .t-card > p { grid-area: why; } .t-warn { grid-area: warn; }
+  .t-stats { grid-area: stats; align-self: center; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

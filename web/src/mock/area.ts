@@ -310,5 +310,42 @@ export function cafeSeoul(gu: string) {
   };
 }
 
+// ---- 동 안 상권 추천 (dong_trdar.json, pipelines/build_dong_trdar.py) ---------------------------------------------
+// 라벨 규칙은 docs/design-handoff/README.md 4장의 제안에, 성장·안정은 점포 10곳 이상인 상권에만 붙인다는 조건을 더한 것(2026-10-18 확정).
+// 점포가 몇 곳 안 되는 상권은 한두 곳의 매출로 증감과 점포당 매출이 크게 흔들려서다. 바꾸려면 여기 숫자만 고치면 된다.
+export type TrdarInd = {
+  stores: number; franchise: number; open: number; close: number; per_store?: number | null; yoy?: number;
+  weekend?: number; band?: Record<"morning" | "lunch" | "afternoon" | "evening" | "night", number> | null; age2030?: number; age4050?: number;
+};
+export type Trdar = { code: string; name: string; type: string; ind: Partial<Record<Industry, TrdarInd>> };
+export type TrdarData = { _meta: { quarter: string; quarter_prev: string; flow_quarters: string[]; bench: Record<Industry, { n: number; per_store_q: number[] }> }; dong: Record<string, Trdar[]> };
+export type TrdarLabel = "성장" | "안정" | "조심";
+export type TrdarPick = { t: Trdar; m: TrdarInd; label: TrdarLabel | null };
+let TRDAR: TrdarData | null = null;
+export const setTrdarData = (d: TrdarData | null) => { TRDAR = d; };
+export const trdarMeta = () => TRDAR?._meta ?? null;
+export const TRDAR_RULE = { minStores: 5, labelMinStores: 10, stableClose: 0.1, cautionYoy: -15, cautionCloseRatio: 1.5 };
+export function trdarPicks(code: string): { all: Trdar[]; picks: TrdarPick[] } | null {
+  if (!TRDAR) return null;
+  const all = TRDAR.dong[code] ?? [];
+  const R = TRDAR_RULE, ind = industry();
+  // 대상: 해당 업종 점포 5곳 이상이고 매출 자료가 있는 상권
+  const cand = all.flatMap((t) => { const m = t.ind[ind]; return m && m.stores >= R.minStores && m.per_store != null ? [{ t, m }] : []; });
+  const label = new Map<string, TrdarLabel>();
+  const big = cand.filter((x) => x.m.stores >= R.labelMinStores); // 성장·안정 후보
+  const grow = [...big].filter((x) => (x.m.yoy ?? 0) > 0).sort((a, b) => (b.m.yoy ?? 0) - (a.m.yoy ?? 0))[0];
+  if (grow) label.set(grow.t.code, "성장");
+  const top = [...big].sort((a, b) => (b.m.per_store ?? 0) - (a.m.per_store ?? 0))[0];
+  if (top && !label.has(top.t.code) && top.m.close <= top.m.stores * R.stableClose) label.set(top.t.code, "안정");
+  for (const x of cand) {
+    if (label.has(x.t.code)) continue; // 겹치면 성장 > 안정 > 조심
+    if ((x.m.yoy ?? 0) <= R.cautionYoy || x.m.close > x.m.open * R.cautionCloseRatio) label.set(x.t.code, "조심");
+  }
+  const order = { 성장: 0, 안정: 1, 조심: 2 } as const;
+  const picks = cand.map(({ t, m }) => ({ t, m, label: label.get(t.code) ?? null }))
+    .sort((a, b) => (a.label ? order[a.label] : 3) - (b.label ? order[b.label] : 3) || (b.m.per_store ?? 0) - (a.m.per_store ?? 0));
+  return { all, picks };
+}
+
 // 자료를 모듈 변수에 들고 있어서, 이 파일이 핫리로드로 새로 불리면 자료가 비는데 화면은 로딩 완료로 남는다. 통째로 다시 불러 맞춘다.
 if (import.meta.hot) import.meta.hot.accept(() => location.reload());

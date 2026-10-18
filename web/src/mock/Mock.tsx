@@ -2,7 +2,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { DEFAULT_LEVERS, DEFAULT_PROFILE, emptyStore, setAreaInput, setDongData, setGrowth, setGuData, setKrei, setRentData, setRentInput, type Gu, type Levers, type Profile, type Store } from "./model";
 import ProfileStep from "./Profile";
-import { setAreaData, setShopData, useIndustry } from "./area";
+import { setAreaData, setShopData, setTrdarData, useIndustry } from "./area";
 import Analysis from "./Analysis";
 import Chat from "./Chat";
 import CafeBuild from "./CafeBuild";
@@ -46,11 +46,12 @@ export default function Mock() {
     const growth = cafe ? Promise.resolve(null) : get("growth.json").catch(() => null);         // 없으면 성장률을 숨긴다. 카페는 2024년 구 매출이 없다
     const prof = get(cafe ? "cafe_dong_profile.json" : "dong_profile.json").catch(() => null);     // 없으면 동네 지도와 '~형 상권'을 숨긴다
     const geo = get("seoul_dong.json").catch(() => null);
+    const trdar = get("dong_trdar.json").catch(() => null);                                     // 없으면 동 안 상권 추천을 숨긴다
     const shops = get("dong_shops.json").catch(() => null);                                    // 없으면 동 경쟁 탭의 가게 목록을 숨긴다
     const cafeDong = cafe ? get("cafe_dong.json").catch(() => null) : Promise.resolve(null); // 카페 구성(v6)과 서울 비교
-    Promise.all([get("seoul_gu.json"), get("gu_stats.json"), rent, dong, krei, growth, prof, geo, shops, cafeDong]).then(([g, d, r, dn, k, gr, pf, ge, sh, cd]) => {
+    Promise.all([get("seoul_gu.json"), get("gu_stats.json"), rent, dong, krei, growth, prof, geo, shops, cafeDong, trdar]).then(([g, d, r, dn, k, gr, pf, ge, sh, cd, tr]) => {
       useIndustry(ind); // 아래 set*보다 먼저: 구 통계가 업종 블록을 고른다
-      if (!alive) return; setGuData(d); setRentData(r); setDongData(dn); setKrei(k); setGrowth(gr); setAreaData(pf, ge?.dong ?? null); setShopData(sh, cd); setGus(g); setReady(true);
+      if (!alive) return; setGuData(d); setRentData(r); setDongData(dn); setKrei(k); setGrowth(gr); setAreaData(pf, ge?.dong ?? null); setShopData(sh, cd); setTrdarData(tr); setGus(g); setReady(true);
     }).catch(() => alive && setReady(true));
     return () => { alive = false; };
   }, [ind]);
