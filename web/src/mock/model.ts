@@ -85,7 +85,7 @@ export const setRentData = (d: RentData | null) => { RENT = d; };
 export const rentData = () => RENT;
 let RENT_IN: { gu: string; v: number } | null = null;
 export const setRentInput = (r: { gu: string; v: number } | null) => { RENT_IN = r; };
-const cashRent = (all: number) => all / (1 + (DEPOSIT_MONTHS * ((RENT?.conv_seoul_pct ?? 7) / 100)) / 12);
+export const cashRent = (all: number) => all / (1 + (DEPOSIT_MONTHS * ((RENT?.conv_seoul_pct ?? 7) / 100)) / 12);
 const round1 = (x: number) => Math.round(x * 10) / 10;
 
 export const DEFAULT_PROFILE: Profile = { industry: "bbq", gu: "마포구", reasons: [], capital: 12000, age: "30대" };

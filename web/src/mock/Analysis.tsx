@@ -1,46 +1,44 @@
-// Step 2. 왼쪽에 지도 카드, 오른쪽에 분석 카드. 구를 누르면 지도가 그 구의 행정동 지도로 바뀌고,
-// 오른쪽에는 "OO구, 이런 점이 좋아요!" 또는 "OO동은 [키워드]입니다"가 나온다. 디자인은 팀이 받은 제안 화면(둥근 카드, 알약 버튼, 아이콘 카드)을 따른다.
-import { useMemo, useState, type ReactNode } from "react";
+// Step 2. 왼쪽에 지도 카드, 오른쪽에 분석 카드. 구를 누르면 지도가 그 구의 행정동 지도로 바뀐다.
+// 분석 카드(동네 탭)는 위에서 아래로 한 층에 역할 하나: 제목 = 동네 선택창 → 한눈에 보기(태그 + 문장, 접힌 추천 동네) → 지표 탭 4개 → 주요 지표 상세.
+// 보고 있는 동네는 profile.dong 하나뿐이라 제목 선택창, 지도, 추천 카드 어디서 골라도 같이 바뀐다. 시안: docs/design-handoff/mockups/Main.dc.html
+import { useMemo, useState } from "react";
 import SeoulMap from "./SeoulMap";
 import DongMap, { dongRange } from "./DongMap";
 import Icon from "./Icons";
-import { DONG_METRICS, dongMetricKeys, cuts, geoOf, guInsight, hasDongMap, insightOf, meatSalesNote, picksOf, profileOf, profilesOf, type DongMetric } from "./area";
+import { BbqComp, CafeComp } from "./DongComp";
+import DongTrdar from "./DongTrdar";
+import { DONG_METRICS, bandOf, dongMetricKeys, cuts, geoOf, guInsight, hasDongMap, insightOf, meatSalesNote, picksOf, profileOf, profilesOf, rankWord, type DongMetric, type KTab, type Line, type Tone } from "./area";
 import { FUNDS, FUNDS_SRC } from "./funds";
 import { CAFE_KEY_MONEY, cafeEstimate } from "./cafe";
-import { DEPOSIT_MONTHS, METRICS, RAMP, T, iga, dongsOf, growthMeta, guStat, krei, kreiMean, man, openingCost, rankOf, recommend, rentData, type Gu, type Metric, type Profile } from "./model";
+import { DEPOSIT_MONTHS, METRICS, RAMP, T, iga, dongsOf, guStat, krei, kreiMean, man, openingCost, rankOf, recommend, rentData, type Gu, type Metric, type Profile } from "./model";
 
 type Tab = "place" | "budget" | "fund";
 const TABS: { key: Tab; label: string }[] = [{ key: "place", label: "동네" }, { key: "budget", label: "드는 돈" }, { key: "fund", label: "모자란 돈" }];
 const RUNWAY_MONTHS = 3; // 가정: 자리 잡기 전 석 달 치 적자와 생활비
 const MONTHLY_BURN = 550;
 const sign = (v: number) => (v > 0 ? "+" : "");
+const n0 = (v: number) => v.toLocaleString("ko-KR");
 const lowHigh = (): Record<Metric, [string, string]> => ({ demand: ["매출이 낮은 구", "매출이 높은 구"], growth: ["성장이 느린 구", "성장이 빠른 구"], pork: [`${iga(T().shop)} 적은 구`, `${iga(T().shop)} 많은 구`], closure: ["폐업이 적은 구", "폐업이 많은 구"] });
 
-function Kpi({ icon, label, value, sub, tag, on }: { icon: string; label: string; value: ReactNode; sub?: ReactNode; tag?: ReactNode; on?: boolean }) {
+// 근거 한 줄. scope는 숫자의 업종과 범위(예: "한식음식점 · 구 안 상권")라 고깃집 값과 한식 값, 구 값과 동 값이 섞여 보이지 않게 한다.
+type Detail = { title: string; sub: string; scope: string; value: string };
+function DetailRow({ title, sub, scope, value }: Detail) {
   return (
-    <div className={`a-kpi ${on ? "is-on" : ""}`}>
-      <span className="a-kpi-label"><Icon name={icon} size={18} />{label}</span>
-      <strong>{value}</strong>
-      {tag}
-      {sub && <small>{sub}</small>}
-    </div>
-  );
-}
-function Row({ icon, label, sub, value }: { icon: string; label: string; sub: ReactNode; value: ReactNode }) {
-  return (
-    <div className="a-row">
-      <span className="a-ico"><Icon name={icon} size={18} /></span>
-      <div><b>{label}</b><small>{sub}</small></div>
+    <div className="a-drow">
+      <div><b>{title}</b><small>{sub}</small></div>
+      <span className="a-scope">{scope}</span>
       <strong>{value}</strong>
     </div>
   );
 }
-const Delta = ({ v }: { v: number }) => <span className={`a-delta ${v >= 0 ? "is-up" : "is-down"}`}>{v >= 0 ? "▲" : "▼"} {sign(v)}{v}% <small>(전년 대비)</small></span>;
+type Kpi = { key: KTab; name: string; tag: string; tone: Tone; value: string; unit: string; sub: string; subTone?: "up" | "down"; basis: string; rows: Detail[] };
 
 export default function Analysis({ profile, setProfile, gus, onNext }: {
   profile: Profile; setProfile: (p: Profile) => void; gus: Gu[]; onNext: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("place");
+  const [ktab, setKtab] = useState<KTab>("sales");
+  const [recOpen, setRecOpen] = useState(false);
   const [metric, setMetric] = useState<Metric>("demand");
   const [dmetric, setDmetric] = useState<DongMetric>("growth");
   const [zoom, setZoom] = useState(false);
@@ -48,7 +46,6 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
   const st = guStat(profile.gu);
   const all = names.map(guStat);
   const span = (k: Metric) => { const v = all.map((a) => a[k]).filter((x): x is number => x != null); return { lo: Math.min(...v), hi: Math.max(...v) }; };
-  const porkRank = rankOf(profile.gu, "pork", names);
   // 드는 돈 견적은 사용자가 아직 꾸미지 않았을 수 있어서, 이 돈과 동네에 맞춘 추천 구성으로 낸다 (가게 꾸미기의 '추천 배치'와 같다)
   const est = useMemo(() => profile.industry === "cafe" ? { pyeong: cafeEstimate(profile, RUNWAY_MONTHS * MONTHLY_BURN).pyeong } : recommend(profile).store, [profile.industry, profile.gu, profile.capital, profile.keyMoney, profile.rent, profile.dong, profile.age]); // eslint-disable-line react-hooks/exhaustive-deps
   const cost = profile.industry === "cafe" ? cafeEstimate(profile, RUNWAY_MONTHS * MONTHLY_BURN).cost : openingCost(est as ReturnType<typeof recommend>["store"], profile.gu, profile.keyMoney ?? 0);
@@ -56,7 +53,6 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
   const gap = need - profile.capital;
   const young = profile.age === "20대" || profile.age === "30대";
   const demandRank = rankOf(profile.gu, "demand", names);
-  const growthRank = rankOf(profile.gu, "growth", names);
   const rentRank = names.filter((n) => guStat(n).rent > st.rent).length + 1;
   const m = span(metric);
   const q = rentData()?._meta.quarter;
@@ -70,7 +66,6 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
   const gi = guInsight(profile.gu, names);
   const picks = picksOf(profile.gu);
   const sn = meatSalesNote();
-  const gm = growthMeta();
   const c = cuts();
   const rentNote = st.rentSrc === "입력" ? "월세는 직접 넣은 값이에요."
     : st.rentSrc === "R-ONE 동네" ? `월세는 한국부동산원 ${qLabel} 소규모 상가 1층 임대료 중 이 동네가 속한 상권(${st.rentArea})의 값에서 보증금 환산분(${DEPOSIT_MONTHS}개월)을 뺀 현금 월세예요.`
@@ -78,17 +73,81 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
     : st.rentSrc === "R-ONE 채움" ? "월세는 이 구에 조사 상권이 없어 다른 구 상권의 중앙값으로 채웠어요."
     : "월세는 예시값이에요. 자료를 불러오지 못했어요.";
   const dr = mapMode ? dongRange(dmetric, geo, profs, dongs) : null;
-  const pickDong = (name: string) => { setProfile({ ...profile, dong: { gu: profile.gu, name } }); setTab("place"); };
+  // 동네 고르기는 여기 하나로: 빈 이름이면 구 전체로 돌아간다. 동을 고르면 지도도 그 구의 동네 지도로 연다.
+  const pickDong = (name: string) => {
+    setProfile({ ...profile, dong: name ? { gu: profile.gu, name } : undefined });
+    if (name && hasDongMap()) setZoom(true);
+  };
   const kk = krei()?.micro;
   const keyN = krei()?.tables.key_money?.meat?.n ?? null;
   const growth = dp?.growth ?? st.growth;
   const compete = dp?.comp ?? gi.compete;
-  const place = `${profile.gu}${st.area ? ` ${st.area}` : ""}`;
-  const pros = ins && dp ? ins.pros : gi.pros, cons = ins && dp ? ins.cons : gi.cons;
-  const chips = ins && dp ? ins.chips : gi.chips;
+  const scope = st.area ?? profile.gu;
+  const summary = ins && dp ? ins.summary : gi.summary;
   const gMap = lowHigh()[metric];
   const S = T().shop, B = T().base, cafe = S === "카페";
   const dMap = DONG_METRICS[dmetric];
+  const n = names.length;
+  const lines = [...summary.warn, ...summary.good];
+
+  // 지표 탭 4개. 카드 오른쪽 위 태그는 요약에서 그 탭을 가리키는 첫 태그를 그대로 쓰고, 없으면 중립 태그를 단다.
+  const tagOf = (k: KTab, fallback: string): { tag: string; tone: Tone } => {
+    const l: Line | undefined = lines.find((x) => x.tab === k);
+    return l ? { tag: l.tag, tone: l.tone } : { tag: fallback, tone: "mid" };
+  };
+  const guArea = `${B} · 구 안 상권`;
+  const count = st.area ? st.areaPork ?? 0 : st.pork;
+  const kpis: Kpi[] = [
+    {
+      key: "sales", name: "매출", ...tagOf("sales", "평균 범위"), value: n0(st.sales), unit: "만원",
+      sub: cafe ? (st.salesRange ? `4분의 1~4분의 3: ${n0(st.salesRange[0])}~${n0(st.salesRange[1])}만원` : "점포당 월매출 중앙값")
+        : growth != null ? `${growth >= 0 ? "▲" : "▼"} ${Math.abs(growth)}% 전년 대비 (${st.area ? "동 전체 한식 매출" : "한식"})` : "전년 자료 없음",
+      subTone: !cafe && growth != null ? (growth >= 0 ? "up" : "down") : undefined,
+      basis: cafe ? `카페 점포당 월매출 중앙값 (추정)${st.area ? ", 구 값 × 동네 위치" : ""}` : `고깃집 점포당 월매출 (추정)${st.area ? ", 구 값 × 동네 위치" : ""}`,
+      rows: [
+        { title: "하루 결제 건수", sub: cafe ? "한 곳당 하루 평균 카드 결제" : "한 곳당 하루 평균, 1건은 보통 한 팀", scope: guArea, value: `${st.tx}건` },
+        { title: "매출 지수", sub: "서울 평균을 1로 놓았을 때", scope: st.area ? `${B} · 동 (구 값 × 동네 위치)` : guArea, value: st.demand.toFixed(2) },
+        ...(dp?.apt_price != null ? [{ title: "아파트 평균 시가", sub: "동네 소득 수준을 가늠하는 값", scope: "아파트 · 동", value: `${(Math.round(dp.apt_price / 1e7) / 10).toFixed(1)}억원` }] : []),
+      ],
+    },
+    {
+      key: "comp", name: "경쟁", ...tagOf("comp", `경쟁 ${compete}`), value: n0(count), unit: "곳",
+      sub: st.area ? (dp?.pork_km2 != null && dp.stores >= 20 ? `1㎢당 ${dp.pork_km2}곳 · 경쟁 ${compete}` : `경쟁 ${compete}`) : rankWord(rankOf(profile.gu, "pork", names), n, "많음", "적음"),
+      basis: `${S} 수 (${st.area ? `${st.area} 안` : "구 전체"})`,
+      rows: [
+        // 고깃집은 한식음식점 값과 섞지 않고 고깃집 수만 따로 보인다
+        cafe
+          ? { title: `${B} 수`, sub: "카페를 포함한 커피·음료 가게 전체", scope: st.area ? `${B} · 동` : guArea, value: `${n0(st.area ? st.areaStores ?? 0 : st.stores)}곳` }
+          : { title: "고깃집 수", sub: st.area ? `${st.area} 안의 돼지고기 구이/찜 가게` : `돼지고기 구이/찜 가게 · ${rankWord(rankOf(profile.gu, "pork", names), n, "많음", "적음")}`, scope: st.area ? "고깃집 · 동" : "고깃집 · 구 전체", value: `${n0(count)}곳` },
+        ...(dp?.pop_per_pork != null ? [{ title: `${S} 1곳당 인구`, sub: "주민 + 직장인", scope: `${S} · 동`, value: `${n0(dp.pop_per_pork)}명` }] : []),
+      ],
+    },
+    {
+      key: "cost", name: "비용", ...tagOf("cost", "월세 보통"), value: String(st.rent), unit: "만원",
+      sub: st.area ? (st.rentSrc === "R-ONE 동네" ? "이 동네 상권 값" : "구 평균 값") : rankWord(rentRank, n, "비쌈", "쌈"),
+      basis: "평당 월세 (현금)",
+      rows: st.rentLow !== st.rentHigh ? [{
+        title: "평당 월세 범위", sub: st.rentSrc === "R-ONE 근사" ? `구 안 상권 ${st.rentAreas}곳 중 가장 싼 곳 ~ 가장 비싼 곳` : "상권 값 하나의 ±25% (가정)",
+        scope: "소규모 상가 1층", value: `${st.rentLow}~${st.rentHigh}만원`,
+      }] : [],
+    },
+    {
+      key: "survive", name: "생존", ...tagOf("survive", st.area ? "구 기준" : "폐업 보통"), value: String(st.closure), unit: "%", sub: "1년 폐업률",
+      basis: `${B}, ${cafe ? "최근 4분기" : "2025년"}${st.area ? " · 구 전체" : ""}`,
+      rows: [
+        ...(st.netOpen != null ? [{ title: "가게 수 흐름", sub: "개업률에서 폐업률을 뺀 값, 0보다 작으면 가게가 줄어드는 중", scope: guArea, value: `${sign(st.netOpen)}${st.netOpen}%p` }] : []),
+        ...(cafe && dp?.growth != null ? [{ title: "동네 가게 수 흐름", sub: "이 동네의 개업률 − 폐업률", scope: `${B} · 동`, value: `${sign(dp.growth)}${dp.growth}%p` }] : []),
+        ...(cafe && dp?.life != null ? [{ title: "가게가 버틴 기간", sub: `영업 중인 가게 평균. 문 닫은 가게는 평균 ${dp.close_life}개월 (서울 ${dp.s_close}개월)`, scope: "모든 업종 · 동", value: `${dp.life}개월` }] : []),
+        ...(cafe && dp?.change ? [{ title: "상권 변화 유형", sub: "서울시 상권변화지표 분류 (다이나믹·상권확장·정체·상권축소)", scope: "모든 업종 · 동", value: dp.change }] : []),
+      ],
+    },
+  ];
+  const kp = kpis.find((k) => k.key === ktab)!;
+  const band = ins && dp ? bandOf(dp, ins) : [];
+  const recGroups = [
+    { title: "규모는 작아도 성장하는 동네", items: picks.small },
+    { title: "매출이 크고 꺾이지 않은 동네", items: picks.steady },
+  ].filter((g) => g.items.length > 0);
 
   return (
     <main className="m-area">
@@ -144,91 +203,130 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
 
         {tab === "place" && (
           <div className="m-finding a-place" key="place">
-            <p className="a-loc"><Icon name="pin" size={16} />서울 · {profile.gu}{st.area ? ` · ${st.area}` : ""}</p>
-            <h1>{place} {S}{cafe ? "는" : "은"} 한 곳당 한 달에 {cafe ? "보통 " : ""}<mark>{man(st.sales)}</mark>쯤 팔아요.{cafe && st.salesRange ? ` 4분의 1은 ${man(st.salesRange[0])} 아래, 4분의 1은 ${man(st.salesRange[1])} 위예요.` : ""}{st.area ? "" : ` 25개 구 중 ${demandRank}번째예요.`}</h1>
-
-            <div className="a-hi">
-              <span className="a-bulb"><Icon name="bulb" size={26} /></span>
-              <div className="a-hi-body">
-                {ins && dp ? (
-                  <>
-                    <h2>{st.area}은 <b>{ins.keywords.length ? ins.keywords.join(" · ") : ins.style}</b>입니다.</h2>
-                    <p className="a-style">{ins.style} <small>{ins.why}</small></p>
-                  </>
-                ) : (
-                  <>
-                    <h2>{profile.gu}, 이런 점이 좋아요!</h2>
-                    <p className="a-style a-hint"><Icon name="pin" size={15} /> 지도에서 행정동을 눌러 보세요. 키워드로 핵심만 정리해드려요.</p>
-                  </>
+            <header className="a-head">
+              <span className="a-eyebrow">2단계 · 입지 · {S}</span>
+              <div className="a-title">
+                <h1>{profile.gu}</h1>
+                {dongs.length > 0 && (
+                  <select className="a-dongsel" aria-label="보고 있는 동네" value={st.area ?? ""} onChange={(e) => pickDong(e.target.value)}>
+                    <option value="">구 전체</option>
+                    {dongs.map((d) => <option key={d.code} value={d.name}>{d.name}</option>)}
+                  </select>
                 )}
-                <ul className="a-pc">
-                  {pros.map((t) => <li key={t} className="is-pro"><Icon name="check" size={17} />{t}</li>)}
-                  {cons.map((t) => <li key={t} className="is-con"><Icon name="warn" size={17} />{t}</li>)}
-                </ul>
-                {ins && dp && ins.actions.length > 0 && (
-                  <><p className="a-sub">이렇게 해 보세요</p>
-                  <ol className="m-acts">
-                    {ins.actions.map((a) => <li key={a.text}>{a.text}<small>{a.why}</small></li>)}
-                  </ol></>
-                )}
+                {st.area && <button type="button" className="a-backgu" onClick={() => pickDong("")}>{profile.gu} 전체로 돌아가기</button>}
+                {/* 추천 동네: 제목 옆 작은 버튼, 누르면 바로 아래에 펼친다 */}
+                <button type="button" className="a-rec-btn" aria-expanded={recOpen} aria-controls="rec-list" onClick={() => setRecOpen((o) => !o)}>
+                  <Icon name="star" size={15} />이런 동네는 어때요?<Icon name="arrow" size={16} />
+                </button>
               </div>
-              <ul className="a-chips">{chips.map((ch) => <li key={ch.label} className={`a-chip is-${ch.tone}`}>{ch.label}</li>)}</ul>
-            </div>
+              <small>제목 옆에서 동네를 바꾸거나, 추천 동네나 지도에서 골라도 돼요</small>
+              {recOpen && (
+                <div className="a-rec-body" id="rec-list">
+                  <small>{profile.gu} 안에서 {S} 열기 좋은 동네를 골라 봤어요. 누르면 이 화면의 지표가 그 동네로 바뀌어요.</small>
+                  {recGroups.length > 0 ? recGroups.map((g) => (
+                    <div className="a-rec-grp" key={g.title}>
+                      <h3>{g.title}</h3>
+                      {g.items.map(({ p, note }) => {
+                        const on = st.area === p.name;
+                        return (
+                          <button type="button" key={p.code} className="a-rec-item" aria-pressed={on} onClick={() => pickDong(p.name)}>
+                            <span className="a-rec-name">{p.name}{on && <span className="a-rec-on">보는 중</span>}<Icon name="arrow" size={18} /></span>
+                            <small>{note}</small>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )) : <p className="a-rec-none">이 구에는 기준에 맞는 동네가 아직 없어요. 지도에서 직접 골라 보세요.</p>}
+                </div>
+              )}
+              {st.area && <p className="a-lead">{st.area} {S}{cafe ? "는" : "은"} 한 곳당 한 달에 {cafe ? "보통 " : ""}<mark>{man(st.sales)}</mark>쯤 팔아요.</p>}
+            </header>
 
-            {!st.area && (picks.small.length > 0 || picks.steady.length > 0) && (
-              <div className="a-picks">
-                {picks.small.length > 0 && (
-                  <div>
-                    <b>작아도 크는 동네</b>
-                    <ul>{picks.small.map(({ p, note }) => <li key={p.code}><button type="button" onClick={() => pickDong(p.name)}>{p.name}</button><small>{note}</small></li>)}</ul>
+            {/* 키워드 띠는 '어떤 동네인가'(손님·시간대·사람), 아래 한눈에 보기는 '좋은가 나쁜가'(매출 흐름·경쟁·월세·생존). 같은 숫자를 두 번 쓰지 않는다 */}
+            {ins && dp && (
+              <section className="a-kw" aria-labelledby="kw-title">
+                <span id="kw-title" className="a-kw-eyebrow">이 동네는 이런 상권이에요</span>
+                <div className="a-kw-name">
+                  <strong>{ins.style}</strong>
+                  {ins.keywords.map((k) => <span key={k}>{k}</span>)}
+                </div>
+                <p>{ins.why}.</p>
+                {band.length > 0 && (
+                  <div className="a-kw-cards">
+                    {band.map((b) => (
+                      <div key={b.label}><span>{b.label}</span><b>{b.value}</b><small>{b.sub}</small></div>
+                    ))}
                   </div>
                 )}
-                {picks.steady.length > 0 && (
-                  <div>
-                    <b>매출이 크고 꺾이지 않은 동네</b>
-                    <ul>{picks.steady.map(({ p, note }) => <li key={p.code}><button type="button" onClick={() => pickDong(p.name)}>{p.name}</button><small>{note}</small></li>)}</ul>
-                  </div>
-                )}
-              </div>
+              </section>
             )}
 
-            {dongs.length > 0 && (
-              <div className="a-select">
-                <label htmlFor="dong-in">목록에서 동네 고르기</label>
-                <select id="dong-in" value={profile.dong && profile.dong.gu === profile.gu ? profile.dong.name : ""}
-                  onChange={(e) => setProfile({ ...profile, dong: e.target.value ? { gu: profile.gu, name: e.target.value } : undefined })}>
-                  <option value="">{profile.gu} 전체 (구 평균)</option>
-                  {dongs.map((d) => (
-                    <option key={d.code} value={d.name}>{d.name} · {d.type} · {S} {d.pork}곳{d.rel ? ` · 매출 구 평균의 ${Math.round(d.rel * 100)}%` : ""}</option>
+            {dp && st.area && <DongTrdar code={dp.code} dong={st.area} />}
+
+            <section className="a-sum" aria-labelledby="sum-title">
+              <div className="a-sum-head">
+                <h2 id="sum-title">{scope} 한눈에 보기</h2>
+                <small>태그를 누르면 바로 아래 지표로 연결돼요</small>
+              </div>
+              {([["눈여겨볼 점", "good", summary.good], ["주의할 점", "warn", summary.warn]] as const).map(([title, tone, ls]) => ls.length > 0 && (
+                <div className="a-sum-grp" key={tone}>
+                  <h3 className={`is-${tone}`}>{title}</h3>
+                  {ls.map((l) => (
+                    <div className="a-line" key={l.tag}>
+                      <button type="button" className={`a-tag is-${l.tone}`} aria-pressed={ktab === l.tab} onClick={() => setKtab(l.tab)}>{l.tag}</button>
+                      <span>{l.text}</span>
+                    </div>
                   ))}
-                </select>
-              </div>
-            )}
+                </div>
+              ))}
+              {ins && dp && ins.actions.length > 0 && (
+                <div className="a-acts">
+                  <p className="a-sub">이렇게 해 보세요</p>
+                  {/* 근거 숫자는 바로 위 줄과 키워드 띠에 이미 있어서 제안 문장만 보인다 */}
+                  <ol className="m-acts">
+                    {ins.actions.map((a) => <li key={a.text}>{a.text}</li>)}
+                  </ol>
+                </div>
+              )}
+            </section>
 
-            <div className="a-kpis">
-              <Kpi on icon="chart" label={cafe ? "지역 매출 (중앙값)" : "지역 평균 매출"} value={man(st.sales)} tag={growth != null && !cafe ? <Delta v={growth} /> : undefined} sub={(cafe ? "점포당 월매출 중앙값" : "점포당 월매출") + (st.area ? " (구 값 × 동네 상대 위치)" : "") + (cafe && st.salesRange ? ` · ${st.salesRange[0].toLocaleString("ko-KR")}~${st.salesRange[1].toLocaleString("ko-KR")}만원` : "")} />
-              <Kpi icon="grid" label="경쟁 강도" value={compete} sub={`${S} ${(st.area ? st.areaPork ?? 0 : st.pork).toLocaleString("ko-KR")}곳${dp?.pork_km2 != null && dp.stores >= 20 ? ` · ${dp.pork_km2}곳/㎢` : ""}`} />
-              <Kpi icon="coin" label="비용" value={<>{st.rent}<span>만원</span></>} sub={<>평당 월세{st.rentLow !== st.rentHigh ? ` (${st.rentLow}~${st.rentHigh})` : ""}</>} />
-              <Kpi icon="trend" label={cafe ? "수요와 흐름" : "수요와 성장"} value={cafe ? (growth != null ? `${sign(growth)}${growth}%p` : "-") : growth != null ? `${sign(growth)}${growth}%` : "-"} sub={cafe ? `가게 수 흐름(개업률−폐업률) · 매출 지수 ${st.demand.toFixed(2)}` : `매출 성장률 · 매출 지수 ${st.demand.toFixed(2)}`} />
+            <div className="a-ktabs" role="tablist" aria-label={`${scope} 지표`}>
+              {kpis.map((k) => (
+                <button type="button" role="tab" key={k.key} id={`kt-${k.key}`} aria-selected={ktab === k.key} aria-controls="kpanel" className="a-ktab" onClick={() => setKtab(k.key)}>
+                  <span className="a-ktab-top"><span className="a-ktab-name">{k.name}</span><span className={`a-tag-sm is-${k.tone}`}>{k.tag}</span></span>
+                  <strong>{k.value}<span>{k.unit}</span></strong>
+                  <span className={`a-ktab-sub${k.subTone ? ` is-${k.subTone}` : ""}`}>{k.sub}</span>
+                  <small>{k.basis}</small>
+                </button>
+              ))}
             </div>
 
-            <h2 className="a-h2">주요 지표 상세</h2>
-            <div className="a-rows">
-              <Row icon="shop" label={`${S} 수`} sub={st.area ? `${st.area} 안의 ${T().kind}` : `구 전체 ${T().kind} · ${porkRank}번째로 많아요`} value={`${(st.area ? st.areaPork ?? 0 : st.pork).toLocaleString("ko-KR")}곳`} />
-              <Row icon="grid" label={`${B} 수`} sub={st.area ? "동네 안의 가게" : "상권 안의 가게"} value={`${(st.area ? st.areaStores ?? 0 : st.stores).toLocaleString("ko-KR")}곳`} />
-              <Row icon="warn" label="1년 폐업률" sub={`${cafe ? "최근 4분기에" : "2025년"} 문 닫은 ${B} (${profile.gu})`} value={`${st.closure}%`} />
-              <Row icon="users" label="하루 결제 건수" sub={cafe ? "커피·음료 가게 한 곳당 (카드 결제 건수)" : "한식음식점 한 곳당, 1건은 보통 한 팀"} value={`${st.tx}건`} />
-              {st.netOpen != null && <Row icon="calendar" label="가게 수 흐름" sub={`${profile.gu} 개업률 − 폐업률`} value={`${sign(st.netOpen)}${st.netOpen}%p`} />}
-              {st.growth != null && !cafe && <Row icon="trend" label="구 매출 성장" sub={`${gm?.prev ?? 2024}년 대비 · ${growthRank}번째`} value={`${sign(st.growth)}${st.growth}%`} />}
-              {dp?.pop_per_pork != null && <Row icon="users" label={`${S} 1곳당 인구`} sub="직장인구 + 상주인구" value={`${dp.pop_per_pork.toLocaleString("ko-KR")}명`} />}
-              {cafe && dp?.life != null && <Row icon="calendar" label="가게가 버틴 기간" sub={`영업 중인 가게 평균. 문 닫은 가게는 평균 ${dp.close_life}개월 (서울 ${dp.s_close}개월), 업종 구분 없는 동 전체`} value={`${dp.life}개월`} />}
-              {cafe && dp?.change && <Row icon="trend" label="상권 변화 유형" sub="서울시 상권변화지표 분류 (다이나믹·상권확장·정체·상권축소)" value={dp.change} />}
-              {dp?.apt_price != null && <Row icon="home" label="아파트 평균 시가" sub="동네 소득 수준을 가늠하는 값" value={`${(Math.round(dp.apt_price / 1e7) / 10).toFixed(1)}억원`} />}
+            <div className="a-kpanel" role="tabpanel" id="kpanel" aria-labelledby={`kt-${ktab}`}>
+              <p className="a-kpanel-title">주요 지표 상세</p>
+              {ktab === "comp" && dp
+                ? (cafe ? <CafeComp p={dp} gu={profile.gu} /> : <BbqComp p={dp} count={count} />)
+                : kp.rows.map((r) => <DetailRow key={r.title} {...r} />)}
+              {ktab === "cost" && (
+                <div className="a-rent">
+                  <label htmlFor="rent-in">찾아 둔 매물이 있다면 평당 월세를 넣어 보세요 <small>(선택)</small></label>
+                  <div>
+                    <input id="rent-in" type="number" inputMode="decimal" min={0} step={0.1} placeholder={String(st.rent)}
+                      value={profile.rent && profile.rent.gu === profile.gu ? profile.rent.v : ""}
+                      onChange={(e) => {
+                        const v = parseFloat(e.target.value);
+                        setProfile({ ...profile, rent: v > 0 ? { gu: profile.gu, v } : undefined });
+                      }} />
+                    <span>만원/평·월</span>
+                    {profile.rent && <button type="button" className="m-link" onClick={() => setProfile({ ...profile, rent: undefined })}>지우기</button>}
+                  </div>
+                  <small>보증금을 뺀, 매달 내는 현금 월세예요. 넣으면 보증금과 월 고정비가 이 값으로 다시 계산돼요.</small>
+                </div>
+              )}
             </div>
 
             <p className="a-notice"><Icon name="info" size={17} />지표는 지역 평균 기준이에요. 실제 매장 상황에 따라 달라질 수 있어요. {rentNote}</p>
 
-            <div className="a-lower">
+            {(profile.reasons.includes("월세가 쌀 것 같아서") || profile.reasons.includes("유동 인구가 많아서")) && (
               <div className="a-asides">
                 {profile.reasons.includes("월세가 쌀 것 같아서") && (
                   <p className="m-aside">
@@ -241,21 +339,7 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
                   <p className="m-aside"><b>유동 인구가 많다고 하셨죠.</b> 가게 한 곳의 매출로는 {demandRank}번째예요. 지나가는 사람이 많아도 가게마다 손님이 많다는 뜻은 아니에요.</p>
                 )}
               </div>
-              <div className="a-rent">
-                <label htmlFor="rent-in">찾아 둔 매물이 있다면 평당 월세를 넣어 보세요 <small>(선택)</small></label>
-                <div>
-                  <input id="rent-in" type="number" inputMode="decimal" min={0} step={0.5} placeholder={String(st.rent)}
-                    value={profile.rent && profile.rent.gu === profile.gu ? profile.rent.v : ""}
-                    onChange={(e) => {
-                      const v = parseFloat(e.target.value);
-                      setProfile({ ...profile, rent: v > 0 ? { gu: profile.gu, v } : undefined });
-                    }} />
-                  <span>만원/평·월</span>
-                  {profile.rent && <button type="button" className="m-link" onClick={() => setProfile({ ...profile, rent: undefined })}>지우기</button>}
-                </div>
-                <small>보증금을 뺀, 매달 내는 현금 월세예요. 넣으면 보증금과 월 고정비가 이 값으로 다시 계산돼요.</small>
-              </div>
-            </div>
+            )}
 
             <details className="m-srcnote"><summary>숫자의 출처와 한계</summary>
               <p className="m-src">
