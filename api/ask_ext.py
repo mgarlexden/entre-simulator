@@ -49,7 +49,8 @@ TOPIC_RE: list[tuple[str, re.Pattern]] = [
     ("livestock", re.compile(r"사육|마릿수|마리|두수|농장|농가|출하|도축|자돈|젖소|한우|육우|송아지")),
     # 고기 가격과 채소 가격 분리
     ("meat_price", re.compile(r"삼겹|목살|목심|항정|kg|지육|원육|고기 ?값|도매 ?가|소매 ?가|경락|시세|소비자가|돼지|소고기|닭고기")),
-    ("food_price", re.compile(r"상추|깻잎|당근|배추|양배추|양파|감자|대파|쪽파|마늘|고추|오이|호박|버섯|채소|야채|쌀|밀가루|식용유|설탕|계란|달걀")),
+    ("food_price", re.compile(r"상추|깻잎|당근|배추|양배추|양파|감자|고구마|대파|쪽파|마늘|고추|오이|호박|버섯|시금치|토마토|부추|미나리|"
+                              r"생강|브로콜리|파프리카|피망|열무|채소|야채|쌀|현미|콩|팥|녹두|밀가루|식용유|설탕|계란|달걀")),
     ("sales", re.compile(r"매출|객단가|폐업|생존|문 ?닫|결제|한식음식점")),
     ("neighborhood", re.compile(r"동네|행정동|유형")),
     ("cost", re.compile(r"영업이익률|원가율|마진|비용 ?구조|비율|퍼센트|몇 ?%|몇 ?프로")),
@@ -73,7 +74,11 @@ ITEMS: list[tuple[str, re.Pattern]] = [
     ("배추", re.compile(r"(?<!양)배추")), ("양배추", re.compile(r"양배추")), ("양파", re.compile(r"양파")),
     ("감자", re.compile(r"감자")), ("대파", re.compile(r"대파|쪽파")), ("마늘", re.compile(r"마늘")),
     ("고추", re.compile(r"고추")), ("오이", re.compile(r"오이")), ("호박", re.compile(r"호박")),
-    ("버섯", re.compile(r"버섯")), ("채소", re.compile(r"채소|야채")), ("쌀", re.compile(r"쌀(?!국수)")),
+    ("버섯", re.compile(r"버섯")), ("쌀", re.compile(r"쌀(?!국수)")), ("고구마", re.compile(r"고구마")),
+    ("시금치", re.compile(r"시금치")), ("토마토", re.compile(r"토마토")), ("부추", re.compile(r"부추")),
+    ("미나리", re.compile(r"미나리")), ("생강", re.compile(r"생강")), ("브로콜리", re.compile(r"브로콜리")),
+    ("파프리카", re.compile(r"파프리카|피망")), ("열무", re.compile(r"열무")), ("현미", re.compile(r"현미")),
+    ("팥", re.compile(r"팥")), ("녹두", re.compile(r"녹두")),
     ("밀가루", re.compile(r"밀가루")), ("식용유", re.compile(r"식용유")), ("설탕", re.compile(r"설탕")),
     ("계란", re.compile(r"계란|달걀")), ("우유", re.compile(r"우유")),
     ("원두", re.compile(r"원두|커피 ?콩")),
@@ -83,7 +88,8 @@ ITEMS: list[tuple[str, re.Pattern]] = [
 ]
 PRICE_Q = re.compile(r"가격|얼마|시세|값|단가|비싸|싸[요나니게]|올랐|내렸|오르|내리|물가")
 PRICE_WORD = re.compile(r"가격|물가|시세|원/|원이에요|원이고")
-HAVE_PRICES = "지금 가격 자료가 있는 품목은 돼지고기(삼겹살·목심·갈비 등) 소비자가격과 물가지수, 카페 원두 구매량·구매 금액이에요."
+HAVE_PRICES = ("지금 가격 자료가 있는 품목은 돼지고기(삼겹살·목심·갈비 등) 소비자가격과 물가지수, "
+               "서울 채소·곡물 소매가격(KAMIS: 상추, 깻잎, 양파, 대파, 마늘, 고추, 쌀 등), 카페 원두 구매량·구매 금액이에요.")
 
 NONE_MESSAGE = ("죄송해요, 그 질문에 맞는 근거 자료를 찾지 못했어요.\n"
                 "이런 질문에는 자료를 바탕으로 답할 수 있어요.\n"
@@ -92,6 +98,7 @@ NONE_MESSAGE = ("죄송해요, 그 질문에 맞는 근거 자료를 찾지 못�
                 "• 카페·고깃집 경쟁: 지역별 가게 수, 폐업률, 매출\n"
                 "• 동네 분석: 유동인구, 직장인구, 동네 유형\n"
                 "• 고기 가격: 돼지고기 소비자가격, 물가지수\n"
+                "• 채소·곡물 가격: 서울 소매가격 (상추, 양파, 대파, 마늘, 쌀 등)\n"
                 "• 날씨, 공휴일")
 OFF_MESSAGE = "죄송해요, 그건 이 서비스 범위를 벗어나요. 🙅\n이 서비스는 가게를 열 때 필요한 숫자(동네 분석, 월세, 창업 비용, 재료비, 메뉴 가격, 시뮬레이션)만 다뤄요.\n세금, 법률, 투자 상품, 주식 같은 질문은 전문가 상담을 받아보세요."
 
@@ -137,9 +144,9 @@ def static_facts() -> tuple[list[dict], dict]:
     c = _load("cafe_gu.json")
     d = _load("cafe_dong.json")
     e = _load("cafe_cost.json")
-    f = _load("kosis_food.json")  # 채소·식품 물가지수
+    f = _load("kamis.json")  # 서울 채소·곡물 소매가격 (pipelines/fetch_kamis.py)
 
-    facts = a["facts"] + b["facts"]
+    facts = a["facts"] + b["facts"] + f.get("facts", [])
     # 카페 JSON을 facts 형태로 변환
     if c.get("facts"):
         facts.extend([{
@@ -151,7 +158,8 @@ def static_facts() -> tuple[list[dict], dict]:
     if d.get("facts"):
         facts.extend(d["facts"])
 
-    # cafe_cost.json의 창업조건·비용을 facts로 변환
+    # cafe_cost.json의 창업조건·비용을 facts로 변환 (출처는 항목마다 다르다)
+    cafe_srcs: dict[str, dict] = {}
     if e.get("start"):
         for item in e["start"]:
             cost_id = item.get("id", "")
@@ -180,8 +188,6 @@ def static_facts() -> tuple[list[dict], dict]:
                     text = f"{name}: {yeyo((fmt(low) if low is not None else '') + '~' + (fmt(high) if high is not None else ''))}."
                 if note:
                     text += f" 참고로 {note}."
-                if item.get("source"):
-                    text += f" (출처: {item['source']})"
 
                 # 주제 태그: 검색 가능하게 카테고리화
                 tags = ["카페", "비용"]
@@ -202,17 +208,19 @@ def static_facts() -> tuple[list[dict], dict]:
                     "id": f"cafe_cost_{cost_id}",
                     "tags": tags,
                     "text": text,
-                    "sources": ["cafe_cost"]
+                    "sources": [f"cafe_cost:{item.get('source') or '외식업체 경영실태조사'}"]
                 })
+                src = item.get("source") or "외식업체 경영실태조사"
+                cafe_srcs[f"cafe_cost:{src}"] = {
+                    "publisher": "농림축산식품부·한국농촌경제연구원" if "경영실태조사" in src else "언론·업계 자료",
+                    "title": src, "api": "카페 리서치 정리본 (cafe_cost.json)", "url": "", "period": "2025~2026년"}
 
     sources = {**a["sources"], **b["sources"]}
     if c.get("sources"):
         sources.update(c["sources"])
     if d.get("sources"):
         sources.update(d["sources"])
-    if e.get("_meta"):
-        sources["cafe_cost"] = {"publisher": "농림축산식품부·한국농촌경제연구원", "title": "외식업체 경영실태조사 원자료 (카페 정리본)",
-                                "api": e["_meta"].get("source", ""), "url": "", "period": "2025년 조사"}
+    sources.update(cafe_srcs)
     if f.get("sources"):
         sources.update(f["sources"])
 
@@ -409,7 +417,7 @@ def run(q: str, ctx: dict | None = None, k: int = 3) -> dict:
     ranked = sorted(((s * (1.25 if f["id"].startswith("live_") else 1.0), f) for s, f in ranked), key=lambda x: -x[0])
     top = ranked[0][0] if ranked else 0.0
     # 주제가 명확히 인식된 경우 임계값을 더 높게 (엉뚱한 답을 피하기 위해)
-    threshold = 0.25 if tps else 0.20
+    threshold = 0.0 if price_q else 0.25 if tps else 0.20   # 품목 가격 질문은 이미 품목 이름으로 걸렀다
     if top < threshold:
         # 범위 밖 질문이면 명확하게 답변
         if OFFTOPIC.search(q):
