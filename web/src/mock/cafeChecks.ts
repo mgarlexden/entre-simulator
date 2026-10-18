@@ -2,7 +2,8 @@
 // 매출은 동네 점포당 월매출의 중앙값(model.ts CAFE_MEDIAN)과 4분의 1·4분의 3 분위로 세 가지 경우를 본다.
 // 비용 구조는 외식업체 경영실태조사 2025 커피전문점(전국, 프랜차이즈 포함, 2-2 정량 데이터 표 95~104·127)이고, 값마다 아래에 출처를 적었다.
 import { CAFE_GRADES, CAFE_SIGN, cafeOpeningCost } from "./cafe";
-import { guStat, man, type Check, type Grade, type Profile } from "./model";
+import { guStat, iga, man, type Check, type Grade, type Profile, type Status } from "./model";
+import type { Preview } from "./useCafePreview";
 
 export const C = {
   TICKET: 5704,        // 원, 1인 객단가 (표 67)
@@ -52,9 +53,32 @@ export function cafeRun(profile: Profile, cfg: CafeCfg, sales: number, shock: { 
   return { start, open, rows, settled, fixed, rent, labor };
 }
 
+// 자리와 일손: 엔진 미리보기에서 가장 바쁜 한 시간의 주문을 좌석·에스프레소 추출·주문 받기·인력이 각각 몇 배까지 감당하는지 본다.
+// 1배보다 작으면 그 시간 손님을 돌려보낸다. 시간표에서 필요 인원보다 사람이 적은 시간이 있어도 '주의'로 본다.
+export function fitCheck(pv: Preview, staff: number, noDong: boolean): Check {
+  const b = [...pv.bottleneck].sort((x, y) => x.ratio - y.ratio);
+  const lo = b[0];
+  const short = pv.staff.schedule.filter((h) => h.short).length;
+  const day = pv.demand.peak_day === "weekend" ? "주말" : "평일";
+  const rec = pv.staff.recommended_peak ?? 0;
+  const status: Status = lo.ratio < 0.85 ? "weak" : lo.ratio < 1 || short > 0 ? "warn" : "ok";
+  const line = (lo.ratio < 1
+    ? `${day} 가장 바쁜 시간에 ${iga(lo.label_ko)} 먼저 막혀서 그 시간 손님의 약 ${Math.round((1 - lo.ratio) * 100)}%를 받지 못해요.`
+    : `${day} 가장 바쁜 시간(시간당 주문 약 ${Math.round(pv.demand.peak_orders_per_h)}건)에도 다 받을 수 있어요. 가장 빠듯한 ${lo.label_ko}도 그 시간 주문의 ${lo.ratio.toFixed(1)}배를 감당해요.`)
+    + (short > 0 ? ` 하루 ${short}시간은 일손이 모자라요.` : "");
+  return {
+    key: "fit", title: "자리와 일손이 손님 수에 맞나요?", status, line,
+    todo: rec > staff + 1 ? `엔진은 바쁜 시간에 사장님 포함 ${rec}명을 권해요. 지금은 ${staff + 1}명이에요.` : undefined,
+    rows: b.map((x) => ({ label: x.label_ko, value: `바쁜 시간 주문의 ${x.ratio.toFixed(1)}배`, ok: x.ratio >= 1 })),
+    rule: `엔진 미리보기로 계산했어요. ${day} 가장 바쁜 한 시간의 주문을 좌석, 에스프레소 추출, 주문 받기, 일하는 사람(사장님 포함 ${staff + 1}명)이 각각 몇 배까지 감당하는지 본 값이에요. 1배보다 작으면 그 시간 손님을 돌려보내요. 하루 손님 수는 위 점검과 같은 동네 보통 카페 매출에 맞췄어요${noDong ? ". 동네를 고르지 않아서 시간대별 손님 분포는 대학로 값을 써요" : ""}. 처리 속도와 머무는 시간은 가정값이에요.`,
+  };
+}
+
 const months = (n: number) => (n >= 12 ? `${Math.floor(n / 12)}년${n % 12 ? ` ${n % 12}개월` : ""}` : `${n}개월`);
 
-export function cafeChecks(profile: Profile, cfg: CafeCfg): { list: Check[]; settled: number } {
+// pv(엔진 미리보기)가 있으면 '자리와 일손' 카드를 두 번째에 넣는다. 그때는 평수를 줄이라는 문장을 빼고 '이렇게 바꾸면'(cafeFixes.ts)에 맡긴다.
+// 평수를 줄이면 좌석이 줄어 손님을 놓칠 수 있는데, 그 계산은 엔진에만 있기 때문이다.
+export function cafeChecks(profile: Profile, cfg: CafeCfg, pv?: Preview | null): { list: Check[]; settled: number } {
   const st = guStat(profile.gu);
   const mid = st.sales, [lo, hi] = st.salesRange ?? [mid * 0.75, mid * 1.5];
   const run = cafeRun(profile, cfg, mid);
@@ -70,7 +94,7 @@ export function cafeChecks(profile: Profile, cfg: CafeCfg): { list: Check[]; set
   // 평수를 줄이면 어떻게 되나 (월세와 면적별 매출 차이 반영)
   let best = { p: cfg.pyeong, v: run.settled };
   for (let p = 10; p <= 30; p++) { const s = cafeRun(profile, { ...cfg, pyeong: p }, mid).settled; if (s > best.v + 1) best = { p, v: s }; }
-  const smaller = best.p < cfg.pyeong ? `${best.p}평으로 줄이면 자리가 잡힌 뒤 한 달 손익이 ${fix(best.v)}이 돼요(월세와 면적별 매출 차이 반영).` : undefined;
+  const smaller = !pv && best.p < cfg.pyeong ? `${best.p}평으로 줄이면 자리가 잡힌 뒤 한 달 손익이 ${fix(best.v)}이 돼요(월세와 면적별 매출 차이 반영).` : undefined;
 
   const shocks: { label: string; r: ReturnType<typeof cafeRun> }[] = [
     { label: "원두·우유값이 10% 오른다", r: cafeRun(profile, cfg, mid, { food: 0.1 }) },
@@ -125,6 +149,7 @@ export function cafeChecks(profile: Profile, cfg: CafeCfg): { list: Check[]; set
       rule: "한 가지씩 따로 6개월 내내 이어진다고 보고 계산했어요. 괄호 안은 아무 일 없을 때와의 차이예요. 식재료비·월세·인건비 상승은 외식업 경영 애로 응답(식재료 91.4%, 월세 77.3%, 인건비 75.2%, 경영실태조사 2023)에서 골랐고, 10%라는 크기와 경쟁점 효과는 가정이에요.",
     },
   ];
+  if (pv) list.splice(1, 0, fitCheck(pv, cfg.staff, !(profile.dong && profile.dong.gu === profile.gu)));
   return { list, settled: run.settled };
 }
 

@@ -1,0 +1,14 @@
+/* 열기 전 점검의 '이렇게 바꾸면' (CafeFixList.tsx). 색은 DESIGN.md의 파랑 한 색, 상태 색은 '나빠져요' 한 줄에만 쓴다.
+   목록은 li가 아니라 div로 만든다: mock.css의 .m-checklist li(점검 카드의 2열 그리드)가 안쪽 li에도 걸려 글자가 26px 칸에 끼었다. */
+.cf-box { margin-block-start: 8px; padding: 10px 14px; border-radius: 12px; background: var(--soft); }
+.cf-head { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink2); }
+.cf-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px; border-block-start: 1px solid var(--rule); }
+.cf-row > div { flex: 1 1 auto; min-inline-size: 0; }
+.cf-row:first-child { border-block-start: 0; padding-block-start: 6px; }
+.cf-row b { display: block; font-weight: 600; }
+.cf-row span { display: block; font-size: 15px; color: var(--ink2); font-variant-numeric: tabular-nums; }
+.cf-row .cf-trade { color: var(--weak-ink); }
+.cf-apply { flex: none; padding: 8px 16px; border: 0; border-radius: 10px; background: var(--blue-wash); color: var(--blue-deep); font-size: 15px; font-weight: 600; transition: background-color 120ms ease-out; }
+@media (hover: hover) { .cf-apply:hover { background: #dfe7fd; } }
+@media (prefers-reduced-motion: reduce) { .cf-apply { transition: none; } }
+.cf-none { margin: 4px 0 0; font-size: 15px; color: var(--ink2); }

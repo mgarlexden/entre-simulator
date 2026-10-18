@@ -1,8 +1,10 @@
 // 카페의 3단계. 가게 꾸미기(3D 배치)는 비워 두고(건희가 마무리), 그 자리에 러프한 입력(평수, 등급, 직원)과 열기 전 점검을 둔다.
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Mark } from "./Checks";
 import { CAFE_GRADES, CAFE_PYEONG, cafeEstimate, cafeOpeningCost } from "./cafe";
 import { cafeChecks, cafeLayoutOf, type CafeCfg } from "./cafeChecks";
+import CafeFixList from "./CafeFixList";
+import { useCafeFixes } from "./cafeFixes";
 import CafeRoom3D from "./CafeRoom3D";
 import { useCafePreview } from "./useCafePreview";
 import { STATUS_LABEL, guStat, man, type Grade, type Profile } from "./model";
@@ -19,9 +21,12 @@ export default function CafeBuild({ profile, cfg: cfgIn, setCfg: setCfgOut, onNe
   const est = useMemo(() => cafeEstimate(profile, 3 * 550), [profile.gu, profile.capital, profile.keyMoney]); // eslint-disable-line react-hooks/exhaustive-deps
   const cfg: CafeCfg = cfgIn ?? { pyeong: est.pyeong, grade: est.grade, staff: 1 };
   const setCfg = setCfgOut;
+  // 아무것도 안 바꾸고 넘어가도 시뮬레이션이 이 화면의 추천 구성으로 돌도록 처음 구성을 저장한다(저장 전에는 시뮬이 20평 기본값을 썼다)
+  useEffect(() => { if (!cfgIn) setCfgOut(cfg); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const pv = useCafePreview(profile, cfg);
   const lay = cafeLayoutOf(cfg);
-  const { list, settled } = useMemo(() => cafeChecks(profile, cfg), [profile, cfg]);
+  const { list, settled } = useMemo(() => cafeChecks(profile, cfg, pv.data), [profile, cfg, pv.data]);
+  const fx = useCafeFixes(profile, cfg, pv.data, list);
   const open = cafeOpeningCost(cfg.pyeong, cfg.grade, profile.gu, profile.keyMoney ?? 0);
   const st = guStat(profile.gu);
   const set = (p: Partial<CafeCfg>) => setCfg({ ...cfg, ...p });
@@ -88,6 +93,9 @@ export default function CafeBuild({ profile, cfg: cfgIn, setCfg: setCfgOut, onNe
                 <h2>{c.title}<span className={`m-status is-${c.status}`}>{STATUS_LABEL[c.status]}</span></h2>
                 <p>{c.line}</p>
                 {c.todo && <p className="m-todo">{c.todo}</p>}
+                {c.status !== "ok" && fx && (
+                  <CafeFixList fixes={fx.by[c.key]} trade={fx.trade[c.key]} none={fx.none.includes(c.key)} settled={settled} onApply={(f) => setCfg(f.move.cfg)} />
+                )}
                 {c.rows && (
                   <ul className="m-shockrows">
                     {c.rows.map((r) => <li key={r.label} className={r.ok ? "is-ok" : "is-weak"}><span>{r.label}</span><b>{r.value}</b></li>)}
@@ -98,6 +106,7 @@ export default function CafeBuild({ profile, cfg: cfgIn, setCfg: setCfgOut, onNe
             </li>
           ))}
         </ul>
+        {pv.err && <p className="m-aside">엔진 미리보기를 부르지 못해서 '자리와 일손' 카드와 '이렇게 바꾸면' 제안은 빠졌어요.</p>}
         <p className="m-aside">
           비용 구조(식재료 39.1%, 세금·공과 6.0%, 기타 5.8%, 객단가 5,704원, 임시직 월 158만원, 대표자 월 211만원)는 외식업체 경영실태조사 2025의 커피전문점 전국 평균이에요.
           프랜차이즈가 섞여 있어서 독립 카페와 다를 수 있어요. 매출은 {profile.gu}의 보통 카페(중앙값) {man(st.sales)}이고, 사장 생활비를 비용으로 뺐어요.
