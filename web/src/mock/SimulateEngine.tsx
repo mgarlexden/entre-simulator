@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { Canvas } from "@react-three/fiber";
 import { GLGuard } from "../shared/GLGuard";
 import { Items, Room, TableLife, seatPoses } from "./Parts3D";
-import { FitControls, People, StoreLights, ViewBar, gfxDpr, useGfx, type Person } from "./Scene3D";
+import { FitControls, People, StoreLights, ViewBar, gfxDpr, gfxShadows, useGfx, type Person } from "./Scene3D";
 import "./simulate-engine.css";
 import { setEngineCtx } from "./chatContext";
 import { LOAN_RATE, OWNER_DRAW, guStat, man, openingCost, roomSize, storeStats, type Levers, type Profile, type Store } from "./model";
@@ -596,7 +596,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
     <div className="sx-root" style={{ top }}>
       <div className="sx-canvas">
         <GLGuard>
-          <Canvas key={gfx} shadows camera={{ position: [w * 0.7, Math.max(w, d) * 1.2, d * 1.6], fov: 38 }} dpr={gfxDpr(gfx)}>
+          <Canvas key={gfx} shadows={gfxShadows(gfx)} camera={{ position: [w * 0.7, Math.max(w, d) * 1.2, d * 1.6], fov: 38 }} dpr={gfxDpr(gfx)}>
             <StoreLights w={w} d={d} r={Math.max(w, d) / 2 + 3} dim={!curDay || curDay.open ? 1 : 0.45} />
             <Room w={w} d={d} grade={store.grade} pyeong={store.pyeong} items={store.items} />
             <Items items={store.items} />

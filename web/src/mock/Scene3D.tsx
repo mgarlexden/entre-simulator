@@ -172,6 +172,7 @@ export const useGfx = () => useSyncExternalStore(subscribe, readGfx);
 export const useView = () => useSyncExternalStore(subscribe, () => curView);
 // canvas props per quality; the canvases key on the quality so a switch rebuilds shaders cleanly
 export const gfxDpr = (g: Gfx): number | [number, number] => (g === "hi" ? [1, 2] : 1);
+export const gfxShadows = (g: Gfx) => g === "hi";
 
 // auto quality only: if the typical frame after warm-up is slow (median frame time over 3 s, after 2 s for shader
 // compiles, above 50 ms = under 20 fps) the canvas switches to lite. The median ignores one-off compile stalls.
@@ -219,14 +220,15 @@ export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: num
     <>
       <color attach="background" args={["#e9eef6"]} />
       {hi && <SoftShadows size={22} samples={14} focus={0.4} />}
-      <Environment resolution={128} frames={1} environmentIntensity={dim}>
+      {hi && <Environment resolution={128} frames={1} environmentIntensity={dim}>
         <Lightformer intensity={1.1} position={[0, 8, 0]} rotation-x={Math.PI / 2} scale={[14, 14, 1]} color="#fff4e4" />
         <Lightformer intensity={0.7} position={[-8, 3, 6]} rotation-y={Math.PI / 4} scale={[8, 3, 1]} color="#ffe2c0" />
         <Lightformer intensity={0.45} position={[8, 3, -6]} rotation-y={-Math.PI / 3} scale={[8, 3, 1]} color="#dfe8ff" />
-      </Environment>
-      <hemisphereLight args={["#fff7ea", "#c9c2b6", 0.35 * dim]} />
-      <ambientLight intensity={0.12 * dim} />
-      <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.9 * dim} color="#fff0dc" castShadow shadow-mapSize={[map, map]} shadow-bias={-0.0004}
+      </Environment>}
+      {/* lite: no environment map and no shadows, so the hemisphere and ambient carry the fill the environment gave */}
+      <hemisphereLight args={["#fff7ea", "#c9c2b6", (hi ? 0.35 : 1.05) * dim]} />
+      <ambientLight intensity={(hi ? 0.12 : 0.45) * dim} />
+      <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.9 * dim} color="#fff0dc" castShadow={hi} shadow-mapSize={[map, map]} shadow-bias={-0.0004}
         shadow-camera-left={-r} shadow-camera-right={r} shadow-camera-top={r} shadow-camera-bottom={-r} shadow-camera-far={40} />
       {hi && <AO />}
       <FpsWatch />
