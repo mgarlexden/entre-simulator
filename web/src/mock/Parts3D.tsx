@@ -11,7 +11,7 @@ import { CELL, GRADES, ITEM, kitchenSpot, type Grade, type Placed } from "./mode
 const WOOD = "#8a5a3c", DARK = "#2b2d30", LEAF = "#4d7a4a", PARTITION = "#e9e2d4";
 const STEEL_DARK = "#5d6166", VINYL = "#b8372b", SOJU = "#2f8f5b", BEER = "#9a6a24", CREAM = "#f4f1ea";
 const TRUNK_Y = WALL_H - 0.3; // exhaust trunk height, under the (undrawn) ceiling
-const FONT = `"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+const FONT = `"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", "Noto Sans KR", sans-serif`;
 
 // stool positions around a table, unrotated (x along item.w, z along item.d)
 export const SEATS: Record<string, [number, number][]> = {

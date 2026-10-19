@@ -88,20 +88,39 @@ export function Pendant({ x, z, y = 1.8, color = "#2f3337" }: { x: number; z: nu
 function AO() {
   const gl = useThree((s) => s.gl), scene = useThree((s) => s.scene), camera = useThree((s) => s.camera), size = useThree((s) => s.size);
   const composer = useMemo(() => {
-    const c = new EffectComposer(gl);
-    const n8 = new N8AOPass(scene, camera, size.width, size.height);
-    n8.configuration.aoRadius = 0.9;
-    n8.configuration.distanceFalloff = 0.6;
-    n8.configuration.intensity = 3;
-    n8.configuration.gammaCorrection = false;
-    c.addPass(n8);
-    c.addPass(new OutputPass());
-    c.addPass(new SMAAPass());
-    return c;
+    try {
+      const c = new EffectComposer(gl);
+      const n8 = new N8AOPass(scene, camera, size.width, size.height);
+      n8.configuration.aoRadius = 0.9;
+      n8.configuration.distanceFalloff = 0.6;
+      n8.configuration.intensity = 3;
+      n8.configuration.gammaCorrection = false;
+      n8.configuration.halfRes = true; // a quarter of the AO pixels: keeps laptop integrated GPUs (Windows Intel/AMD) smooth
+      c.addPass(n8);
+      c.addPass(new OutputPass());
+      c.addPass(new SMAAPass());
+      return c;
+    } catch (e) {
+      console.warn("ambient occlusion unavailable, plain render:", e);
+      return null;
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, scene, camera]);
-  useLayoutEffect(() => composer.setSize(size.width, size.height), [composer, size]);
-  useFrame(() => composer.render(), 1);
+  useLayoutEffect(() => composer?.setSize(size.width, size.height), [composer, size]);
+  // a GPU/driver that fails inside the composer falls back to the plain render for good (errors here skip React's boundary)
+  const broken = useRef(false);
+  useFrame(() => {
+    if (composer && !broken.current) {
+      try {
+        composer.render();
+        return;
+      } catch (e) {
+        broken.current = true;
+        console.warn("ambient occlusion failed, plain render:", e);
+      }
+    }
+    gl.render(scene, camera);
+  }, 1);
   return null;
 }
 export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: number; dim?: number }) {
