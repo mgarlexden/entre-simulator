@@ -173,14 +173,22 @@ export const useView = () => useSyncExternalStore(subscribe, () => curView);
 // canvas props per quality; the canvases key on the quality so a switch rebuilds shaders cleanly
 export const gfxDpr = (g: Gfx): number | [number, number] => (g === "hi" ? [1, 2] : 1);
 export const gfxShadows = (g: Gfx) => g === "hi";
-// lite renders on demand at 30 frames a second (people still move), instead of every display frame
-export const gfxFrameloop = (g: Gfx): "always" | "demand" => (g === "hi" ? "always" : "demand");
-function LiteTicker() {
+// Both qualities render on demand: a frame is drawn only when something changed (a React update in the scene, a zoom,
+// a resize, a camera preset), so an idle screen costs nothing. People do not animate between engine ticks, so no
+// steady ticker is needed. After mount the canvas runs back-to-back for a short warm-up (shader compiles, the
+// environment map, and the fps check below), then goes quiet.
+export const gfxFrameloop = (_g: Gfx): "always" | "demand" => "demand";
+function Warmup({ seconds }: { seconds: number }) {
+  useFrame(({ clock, invalidate }) => {
+    if (clock.getElapsedTime() < seconds) invalidate();
+  });
+  return null;
+}
+// one frame after every React render of the scene (people seated, items placed, plan changed); the instanced figures
+// change only inside useFrame, which R3F cannot see as a prop change
+function RenderOnUpdate() {
   const invalidate = useThree((s) => s.invalidate);
-  useEffect(() => {
-    const id = setInterval(() => invalidate(), 1000 / 30);
-    return () => clearInterval(id);
-  }, [invalidate]);
+  useEffect(() => { invalidate(); });
   return null;
 }
 
@@ -241,7 +249,8 @@ export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: num
       <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.9 * dim} color="#fff0dc" castShadow={hi} shadow-mapSize={[map, map]} shadow-bias={-0.0004}
         shadow-camera-left={-r} shadow-camera-right={r} shadow-camera-top={r} shadow-camera-bottom={-r} shadow-camera-far={40} />
       {hi && <AO />}
-      {hi ? <FpsWatch /> : <LiteTicker />}
+      {hi ? <><FpsWatch /><Warmup seconds={5.5} /></> : <Warmup seconds={1} />}
+      <RenderOnUpdate />
     </>
   );
 }
@@ -299,6 +308,7 @@ export function FitControls({ box, dir = [0.55, 0.95, 1.25], pad = 1.25, lift = 
   dir = view === "top" ? [0, 1, 0.06] : view === "side" ? [1.3, 0.75, 0.22] : front;
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
+  const invalidate = useThree((s) => s.invalidate);
   const ctl = useRef<React.ComponentRef<typeof OrbitControls>>(null);
   const [dist, setDist] = useState(12);
   const [x0, z0, x1, z1] = box;
@@ -329,8 +339,9 @@ export function FitControls({ box, dir = [0.55, 0.95, 1.25], pad = 1.25, lift = 
       ctl.current.update();
     }
     setDist(d);
+    invalidate();
     // dir is a constant per caller; the box is compared by value
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [x0, z0, x1, z1, lift, size.width, size.height, camera, pad, view]);
+  }, [x0, z0, x1, z1, lift, size.width, size.height, camera, pad, view, invalidate]);
   return <OrbitControls ref={ctl} makeDefault enableRotate={false} enablePan={false} minDistance={Math.min(4, dist * 0.5)} maxDistance={dist * 1.8} minPolarAngle={0} maxPolarAngle={Math.PI / 2} />;
 }
