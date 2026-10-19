@@ -1,7 +1,7 @@
 // Shared pieces for the ChangeUp store scenes (고깃집 and 카페): walls that hide on the camera side, a storefront of
 // glass with the door gap, pendant lamps, low-poly people (store3d/Figures) seated or standing, and orbit controls
 // that frame the room for any canvas size. Scene frame: room centred on the origin, front (street) wall at +z.
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer, OrbitControls, SoftShadows } from "@react-three/drei";
 import { N8AOPass } from "n8ao";
@@ -9,6 +9,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js";
 import * as THREE from "three";
+import "./scene3d.css";
 import { Box, C } from "../store3d/Building";
 import { Figures, hash, type FigPose } from "../store3d/Figures";
 
@@ -123,11 +124,101 @@ function AO() {
   }, 1);
   return null;
 }
+// ---------------------------------------------------------------- viewer settings shared by every 3D canvas
+// Camera angle preset (no drag-rotate: the camera only moves when one of these is picked) and graphics quality.
+// Quality starts from a GPU check (software GL or an Intel HD/UHD laptop chip -> lite), drops to lite on its own if
+// its typical frame runs under 20 fps, and a choice made with the toggle wins and is remembered in this browser.
+export type View = "front" | "top" | "side";
+export type Gfx = "lite" | "hi";
+const GFX_KEY = "changeup.gfx";
+let curView: View = "front";
+let curGfx: Gfx | null = null;
+let gfxAuto = true;
+const subs = new Set<() => void>();
+const subscribe = (f: () => void) => (subs.add(f), () => void subs.delete(f));
+function detectGfx(): Gfx {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (!gl) return "lite";
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const r = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return /swiftshader|llvmpipe|software|basic render|intel\(r\) u?hd graphics/i.test(r) ? "lite" : "hi";
+  } catch {
+    return "lite";
+  }
+}
+function readGfx(): Gfx {
+  if (curGfx) return curGfx;
+  try {
+    const v = localStorage.getItem(GFX_KEY);
+    if (v === "lite" || v === "hi") { gfxAuto = false; return (curGfx = v); }
+  } catch { /* storage blocked: fall back to the GPU check */ }
+  return (curGfx = detectGfx());
+}
+export function setGfx(g: Gfx, byUser: boolean) {
+  curGfx = g;
+  if (byUser) {
+    gfxAuto = false;
+    try { localStorage.setItem(GFX_KEY, g); } catch { /* not remembered, still applied */ }
+  }
+  subs.forEach((f) => f());
+}
+export function setView(v: View) {
+  curView = v;
+  subs.forEach((f) => f());
+}
+export const useGfx = () => useSyncExternalStore(subscribe, readGfx);
+export const useView = () => useSyncExternalStore(subscribe, () => curView);
+// canvas props per quality; the canvases key on the quality so a switch rebuilds shaders cleanly
+export const gfxDpr = (g: Gfx): number | [number, number] => (g === "hi" ? [1, 2] : 1);
+
+// auto quality only: if the typical frame after warm-up is slow (median frame time over 3 s, after 2 s for shader
+// compiles, above 50 ms = under 20 fps) the canvas switches to lite. The median ignores one-off compile stalls.
+function FpsWatch() {
+  const t = useRef({ start: -1, last: -1, dts: [] as number[], done: false });
+  useFrame(({ clock }) => {
+    const s = t.current;
+    if (s.done || !gfxAuto || curGfx !== "hi") return;
+    const now = clock.getElapsedTime();
+    if (now < 2) return;
+    if (s.start < 0) { s.start = s.last = now; return; }
+    s.dts.push(now - s.last);
+    s.last = now;
+    if (now - s.start >= 3) {
+      s.done = true;
+      const sorted = [...s.dts].sort((x, y) => x - y);
+      if (sorted[Math.floor(sorted.length / 2)] > 0.05) setGfx("lite", false);
+    }
+  });
+  return null;
+}
+
+const VIEWS: [View, string][] = [["front", "정면"], ["top", "위에서"], ["side", "측면"]];
+const GFXS: [Gfx, string][] = [["lite", "가볍게"], ["hi", "선명하게"]];
+// small toolbar laid over the bottom-right corner of the canvas container (outside the <Canvas>)
+export function ViewBar() {
+  const v = useView(), g = useGfx();
+  return (
+    <div className="v3-bar" role="toolbar" aria-label="3D 보기 설정">
+      <div className="v3-group" role="group" aria-label="보는 각도">
+        {VIEWS.map(([k, l]) => <button key={k} type="button" aria-pressed={v === k} onClick={() => setView(k)}>{l}</button>)}
+      </div>
+      <div className="v3-group" role="group" aria-label="그래픽">
+        <span className="v3-lbl">그래픽</span>
+        {GFXS.map(([k, l]) => <button key={k} type="button" aria-pressed={g === k} onClick={() => setGfx(k, true)}>{l}</button>)}
+      </div>
+    </div>
+  );
+}
+
 export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: number; dim?: number }) {
+  const hi = useGfx() === "hi";
+  const map = hi ? 2048 : 1024;
   return (
     <>
       <color attach="background" args={["#e9eef6"]} />
-      <SoftShadows size={22} samples={14} focus={0.4} />
+      {hi && <SoftShadows size={22} samples={14} focus={0.4} />}
       <Environment resolution={128} frames={1} environmentIntensity={dim}>
         <Lightformer intensity={1.1} position={[0, 8, 0]} rotation-x={Math.PI / 2} scale={[14, 14, 1]} color="#fff4e4" />
         <Lightformer intensity={0.7} position={[-8, 3, 6]} rotation-y={Math.PI / 4} scale={[8, 3, 1]} color="#ffe2c0" />
@@ -135,9 +226,10 @@ export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: num
       </Environment>
       <hemisphereLight args={["#fff7ea", "#c9c2b6", 0.35 * dim]} />
       <ambientLight intensity={0.12 * dim} />
-      <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.9 * dim} color="#fff0dc" castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
+      <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.9 * dim} color="#fff0dc" castShadow shadow-mapSize={[map, map]} shadow-bias={-0.0004}
         shadow-camera-left={-r} shadow-camera-right={r} shadow-camera-top={r} shadow-camera-bottom={-r} shadow-camera-far={40} />
-      <AO />
+      {hi && <AO />}
+      <FpsWatch />
     </>
   );
 }
@@ -184,12 +276,15 @@ export function People({ list }: { list: Person[] }) {
 }
 
 // ---- camera
-// Orbit controls that frame a box [x0, z0, x1, z1] (plus WALL_H of height) from the front-right, for whatever size the
+// Camera controls that frame a box [x0, z0, x1, z1] (plus WALL_H of height) from the front-right, for whatever size the
 // canvas has, with room left for the panels laid over it. Re-frames when the box or the canvas size changes; between
-// those the viewer orbits freely.
+// those the camera stays put: no drag-rotate or pan, only zoom (the 정면/위에서/측면 buttons change the angle).
 export function FitControls({ box, dir = [0.55, 0.95, 1.25], pad = 1.25, lift = 0 }: {
   box: [number, number, number, number]; dir?: [number, number, number]; pad?: number; lift?: number;
 }) {
+  const view = useView();
+  const front = dir;
+  dir = view === "top" ? [0, 1, 0.06] : view === "side" ? [1.3, 0.75, 0.22] : front;
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
   const ctl = useRef<React.ComponentRef<typeof OrbitControls>>(null);
@@ -224,6 +319,6 @@ export function FitControls({ box, dir = [0.55, 0.95, 1.25], pad = 1.25, lift = 
     setDist(d);
     // dir is a constant per caller; the box is compared by value
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [x0, z0, x1, z1, lift, size.width, size.height, camera, pad]);
-  return <OrbitControls ref={ctl} makeDefault enablePan={false} minDistance={Math.min(4, dist * 0.5)} maxDistance={dist * 1.8} minPolarAngle={0.2} maxPolarAngle={1.35} />;
+  }, [x0, z0, x1, z1, lift, size.width, size.height, camera, pad, view]);
+  return <OrbitControls ref={ctl} makeDefault enableRotate={false} enablePan={false} minDistance={Math.min(4, dist * 0.5)} maxDistance={dist * 1.8} minPolarAngle={0} maxPolarAngle={Math.PI / 2} />;
 }

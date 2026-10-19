@@ -7,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { Canvas } from "@react-three/fiber";
 import { GLGuard } from "../shared/GLGuard";
 import { Items, Room, TableLife, seatPoses } from "./Parts3D";
-import { FitControls, People, StoreLights, type Person } from "./Scene3D";
+import { FitControls, People, StoreLights, ViewBar, gfxDpr, useGfx, type Person } from "./Scene3D";
 import "./simulate-engine.css";
 import { setEngineCtx } from "./chatContext";
 import { LOAN_RATE, OWNER_DRAW, guStat, man, openingCost, roomSize, storeStats, type Levers, type Profile, type Store } from "./model";
@@ -382,6 +382,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
   const [engineState, setEngineState] = useState<Record<string, unknown> | null>(null);
   const [done, setDone] = useState<Done[]>([]);
   const [plan, setPlan] = useState<Plan>({ meat_price: levers.price, staff_per_shift: Math.min(4, levers.staff), close_hour: 24, marketing_budget: 0, meat_grade: "domestic", banchan: 5 });
+  const gfx = useGfx();
   const [view, setView] = useState<View>("intro");
   const [fade, setFade] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -595,7 +596,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
     <div className="sx-root" style={{ top }}>
       <div className="sx-canvas">
         <GLGuard>
-          <Canvas shadows camera={{ position: [w * 0.7, Math.max(w, d) * 1.2, d * 1.6], fov: 38 }} dpr={[1, 2]}>
+          <Canvas key={gfx} shadows camera={{ position: [w * 0.7, Math.max(w, d) * 1.2, d * 1.6], fov: 38 }} dpr={gfxDpr(gfx)}>
             <StoreLights w={w} d={d} r={Math.max(w, d) / 2 + 3} dim={!curDay || curDay.open ? 1 : 0.45} />
             <Room w={w} d={d} grade={store.grade} pyeong={store.pyeong} items={store.items} />
             <Items items={store.items} />
@@ -603,6 +604,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
             <FitControls box={[-w / 2, -d / 2, w / 2, d / 2 + 0.6]} dir={[0.7, 1.2, 1.6]} />
           </Canvas>
         </GLGuard>
+        <ViewBar />
       </div>
 
       <header className="sx-hud">

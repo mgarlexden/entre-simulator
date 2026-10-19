@@ -7,7 +7,7 @@ import { Html } from "@react-three/drei";
 import { GLGuard } from "../shared/GLGuard";
 import Checks from "./Checks";
 import { Items, Piece, Room } from "./Parts3D";
-import { FitControls, StoreLights } from "./Scene3D";
+import { FitControls, StoreLights, ViewBar, gfxDpr, useGfx } from "./Scene3D";
 import {
   CATALOG, DEPOSIT_MONTHS, GRADES, ITEM, cashLeft, eul, fits, footprint, guStat, kitchenSpot, man, nextUid, openingCost, roomSize, snap,
   recommend, storeStats, type CatalogItem, type Grade, type Levers, type Placed, type Profile, type Store,
@@ -84,6 +84,7 @@ const LOAN_STEP = 500;
 export default function Builder({ profile, store, setStore, levers, setLevers, onNext }: {
   profile: Profile; store: Store; setStore: (s: Store) => void; levers: Levers; setLevers: (l: Levers) => void; onNext: () => void;
 }) {
+  const gfx = useGfx();
   const [cat, setCat] = useState<CatalogItem["cat"]>("seat");
   const [tool, setTool] = useState<Tool>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -185,12 +186,13 @@ export default function Builder({ profile, store, setStore, levers, setLevers, o
       <div className="m-stage">
         <div ref={portal} className="m-canvas">
           <GLGuard>
-            <Canvas shadows camera={{ position: [w * 0.55, Math.max(w, d) * 0.95, d * 1.25], fov: 38 }} dpr={[1, 2]}>
+            <Canvas key={gfx} shadows camera={{ position: [w * 0.55, Math.max(w, d) * 0.95, d * 1.25], fov: 38 }} dpr={gfxDpr(gfx)}>
               <Scene portal={portal} store={store} tool={tool} selected={selected} ghost={ghost} onFloorMove={onFloorMove} onFloorClick={onFloorClick}
                 onPick={pick} onTurn={turn} onRemove={remove}
                 onMove={() => { if (sel) { setTool({ kind: "move", uid: sel.uid, id: sel.id, rot: sel.rot }); setGhost(null); setMsg("놓을 자리를 누르세요. R 키로 돌리고 Esc로 그만둬요."); } }} />
             </Canvas>
           </GLGuard>
+          <ViewBar />
         </div>
 
         <div className="m-room">
