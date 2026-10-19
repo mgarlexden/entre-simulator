@@ -118,7 +118,7 @@ function GrillTable({ id }: { id: "table4" | "table2" }) {
 // POS at its right end, menu board over it), doorway with a 노렌 on the right, range + hood, prep table, shelves.
 function Kitchen() {
   const { w, d } = ITEM.kitchen;
-  const menu = useMemo(() => boardTex("대학로 삼겹살", ["생삼겹살 · 목살 · 항정살", "된장찌개 · 물냉면 · 공기밥", "소주 · 맥주 · 음료"], "#2b2622", "#f6ead2", 768, 256), []);
+  const menu = useMemo(() => boardTex("메뉴", ["생삼겹살 · 목살 · 항정살", "된장찌개 · 물냉면 · 공기밥", "소주 · 맥주 · 음료"], "#2b2622", "#f6ead2", 768, 256), []);
   return (
     <group>
       <Box p={[0, 0.011, 0]} s={[w, 0.02, d]} color={C.tile} />
@@ -353,12 +353,12 @@ export function Room({ w, d, grade, pyeong, items = [] }: { w: number; d: number
     geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
     return geo;
   }, [w, d]);
-  const fascia = useMemo(() => fasciaSign("대학로 삼겹살", "생삼겹살 전문  목살  소주"), []);
+  const fascia = useMemo(() => fasciaSign("삼겹살", "생삼겹살 전문  목살  소주"), []);
   const blade = useMemo(() => bladeSign("삼겹살", "#f6efe2", "#7d1f16"), []);
-  const posterA = useMemo(() => cardSign("국내산 생삼겹살", "#7d1f16", "#fff3dd", 384, 512, 58), []);
+  const posterA = useMemo(() => cardSign("생삼겹살", "#7d1f16", "#fff3dd", 384, 512, 58), []);
   const posterB = useMemo(() => cardSign("소주 · 맥주", "#1f6b4e", "#ffffff", 384, 512, 64), []);
   const wallMenu = useMemo(() => boardTex("오늘의 고기", ["생삼겹살 180g", "목살 180g", "항정살 150g", "껍데기 200g"], "#3a2a20"), []);
-  const aframe = useMemo(() => boardTex("오늘 추천", ["생삼겹살", "된장찌개 서비스"], "#26302a", "#f2f0e6", 256, 320), []);
+  const aframe = useMemo(() => boardTex("오늘 추천", ["생삼겹살", "목살"], "#26302a", "#f2f0e6", 256, 320), []);
   const door = { x: w / 2 - 1.2, w: 1 };
   const kitchenRight = -w / 2 + ITEM.kitchen.w;
   const fw = Math.min(w - 0.6, 2.8); // fasciaSign canvas is 1024x192
