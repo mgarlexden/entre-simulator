@@ -332,15 +332,9 @@ export default function CafeRoom3D({ room, layout, roster = [], occupancy = 0, h
   const R = Math.max(W, D) / 2 + Math.max(0, gx1 - W) + 2;
   const door = { x: sx(room.door.x), w: room.door.w };
 
-  const gfx = useGfx();
-  return (
+  // everything but the guests, cups and staff: built once per layout, so an occupancy tick re-renders only the people
+  const staticScene = useMemo(() => (
     <>
-    <div className="cs-3d" style={{ height: height === "fill" ? "100%" : height, borderRadius: height === "fill" ? 0 : undefined }} role="img"
-      aria-label="카페 3D 화면. 엔진이 정한 배치대로 창가 바, 테이블과 의자, 키오스크, 카운터의 에스프레소 머신·그라인더·쇼케이스, 뒤쪽 냉장고와 제빙기, 직원과 앉은 손님을 보여 줘요. 공간이 모자라 못 놓은 것은 가게 오른쪽 밖에 빨간 반투명으로 보여요">
-      <GLGuard>
-        <Canvas key={gfx} frameloop={gfxFrameloop(gfx)} shadows={gfxShadows(gfx)} camera={{ position: [W * 0.55, Math.max(W, D) * 0.95, D * 1.25], fov: 40 }} dpr={gfxDpr(gfx)}>
-          <StoreLights w={W} d={D} r={R} />
-
           {/* 바깥 땅과 인도 */}
           <Box p={[0, -0.12, 0]} s={[W + 8 + Math.max(0, gx1 - W) * 2, 0.02, D + 8]} color="#e6eaf2" receive />
           <Box p={[0, -0.1, D / 2 + 1.1]} s={[W + 8 + Math.max(0, gx1 - W) * 2, 0.02, 2]} color="#d6d3cc" receive />
@@ -373,13 +367,27 @@ export default function CafeRoom3D({ room, layout, roster = [], occupancy = 0, h
               </group>
             </Ghost.Provider>
           ))}
+          {lamps.map(([x, z], i) => <Pendant key={i} x={sx(x)} z={sz(z)} y={1.85} />)}
+    </>
+    // sx, sz, yaw, door and backRuns follow from W, D, room, counters
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [W, D, gx1, room, layout, counters, lamps]);
+  const gfx = useGfx();
+  return (
+    <>
+    <div className="cs-3d" style={{ height: height === "fill" ? "100%" : height, borderRadius: height === "fill" ? 0 : undefined }} role="img"
+      aria-label="카페 3D 화면. 엔진이 정한 배치대로 창가 바, 테이블과 의자, 키오스크, 카운터의 에스프레소 머신·그라인더·쇼케이스, 뒤쪽 냉장고와 제빙기, 직원과 앉은 손님을 보여 줘요. 공간이 모자라 못 놓은 것은 가게 오른쪽 밖에 빨간 반투명으로 보여요">
+      <GLGuard>
+        <Canvas key={gfx} frameloop={gfxFrameloop(gfx)} shadows={gfxShadows(gfx)} camera={{ position: [W * 0.55, Math.max(W, D) * 0.95, D * 1.25], fov: 40 }} dpr={gfxDpr(gfx)}>
+          <StoreLights w={W} d={D} r={R} />
+
+          {staticScene}
           {cups.map((c) => (
             <group key={c.id} position={[c.x, c.y, c.z]}>
               <mesh position={[0, 0.005, 0]}><cylinderGeometry args={[0.06, 0.06, 0.01, 14]} /><meshStandardMaterial color={MILK} /></mesh>
               <mesh position={[0, 0.045, 0]} castShadow><cylinderGeometry args={[0.04, 0.032, 0.07, 12]} /><meshStandardMaterial color={MILK} /></mesh>
             </group>
           ))}
-          {lamps.map(([x, z], i) => <Pendant key={i} x={sx(x)} z={sz(z)} y={1.85} />)}
           <People list={people} />
 
           <FitControls box={box} />

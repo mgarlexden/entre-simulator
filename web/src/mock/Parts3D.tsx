@@ -1,7 +1,7 @@
 // The store's 3D pieces, shared by the builder and the simulation view. Colours, the Box helper and the sign textures
 // come from the existing store scene (store3d/Building, store3d/textures); the hood-and-drop exhaust follows
 // store3d/Building's Ceiling. Procedural only, no asset files.
-import { useMemo } from "react";
+import { useMemo, memo } from "react";
 import * as THREE from "three";
 import { Box, C } from "../store3d/Building";
 import { bladeSign, cardSign, fasciaSign, grate } from "../store3d/textures";
@@ -243,7 +243,7 @@ export function Piece({ id }: { id: string }) {
 // Exhaust trunks: one per row of grill tables, hung by straps under the ceiling line. A trunk runs from its right-most
 // table to the left wall and exits through it; a row level with the kitchen stops at the kitchen and rises through
 // the ceiling instead. Every table's drop pipe (in GrillTable) ends inside its row's trunk.
-export function Ducts({ items, w, pyeong }: { items: Placed[]; w: number; pyeong: number }) {
+function DuctsImpl({ items, w, pyeong }: { items: Placed[]; w: number; pyeong: number }) {
   const rows = useMemo(() => {
     const m = new Map<number, number[]>();
     for (const it of items) if (it.id === "table4" || it.id === "table2") {
@@ -277,6 +277,8 @@ export function Ducts({ items, w, pyeong }: { items: Placed[]; w: number; pyeong
     </group>
   );
 }
+// the store shell and furniture do not change between simulation ticks: skip their re-render unless props change
+export const Ducts = memo(DuctsImpl);
 
 const RAW = "#e9a19a", COOKED = "#9a5530";
 const DISH = ["#c8402e", "#4f8a3a", "#e8d38a", "#f1ece2", "#8a5a33", "#6aa04a"];
@@ -343,7 +345,7 @@ export function TableLife({ items, seated }: { items: Placed[]; seated: number[]
 
 // the floor, walls, storefront and the street-side life: fascia sign, blade sign, posters, menu board, warm lights,
 // planters, an A-frame board and beer crates. `items` draws the exhaust trunks over the tables.
-export function Room({ w, d, grade, pyeong, items = [] }: { w: number; d: number; grade: Grade; pyeong?: number; items?: Placed[] }) {
+function RoomImpl({ w, d, grade, pyeong, items = [] }: { w: number; d: number; grade: Grade; pyeong?: number; items?: Placed[] }) {
   const g = GRADES[grade];
   const lines = useMemo(() => {
     const pts: number[] = [];
@@ -424,9 +426,13 @@ export function Room({ w, d, grade, pyeong, items = [] }: { w: number; d: number
     </group>
   );
 }
+// the store shell and furniture do not change between simulation ticks: skip their re-render unless props change
+export const Room = memo(RoomImpl);
 
-export function Items({ items, hide }: { items: Placed[]; hide?: number }) {
+function ItemsImpl({ items, hide }: { items: Placed[]; hide?: number }) {
   return <>{items.filter((it) => it.uid !== hide).map((it) => (
     <group key={it.uid} position={[it.x, 0, it.z]} rotation={[0, it.rot ? Math.PI / 2 : 0, 0]}><Piece id={it.id} /></group>
   ))}</>;
 }
+// the store shell and furniture do not change between simulation ticks: skip their re-render unless props change
+export const Items = memo(ItemsImpl);
