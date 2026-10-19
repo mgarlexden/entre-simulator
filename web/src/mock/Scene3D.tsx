@@ -1,7 +1,7 @@
 // Shared pieces for the ChangeUp store scenes (고깃집 and 카페): walls that hide on the camera side, a storefront of
 // glass with the door gap, pendant lamps, low-poly people (store3d/Figures) seated or standing, and orbit controls
 // that frame the room for any canvas size. Scene frame: room centred on the origin, front (street) wall at +z.
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer, OrbitControls, SoftShadows } from "@react-three/drei";
 import { N8AOPass } from "n8ao";
@@ -173,6 +173,16 @@ export const useView = () => useSyncExternalStore(subscribe, () => curView);
 // canvas props per quality; the canvases key on the quality so a switch rebuilds shaders cleanly
 export const gfxDpr = (g: Gfx): number | [number, number] => (g === "hi" ? [1, 2] : 1);
 export const gfxShadows = (g: Gfx) => g === "hi";
+// lite renders on demand at 30 frames a second (people still move), instead of every display frame
+export const gfxFrameloop = (g: Gfx): "always" | "demand" => (g === "hi" ? "always" : "demand");
+function LiteTicker() {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const id = setInterval(() => invalidate(), 1000 / 30);
+    return () => clearInterval(id);
+  }, [invalidate]);
+  return null;
+}
 
 // auto quality only: if the typical frame after warm-up is slow (median frame time over 3 s, after 2 s for shader
 // compiles, above 50 ms = under 20 fps) the canvas switches to lite. The median ignores one-off compile stalls.
@@ -231,7 +241,7 @@ export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: num
       <directionalLight position={[-w * 0.4, 12, d * 0.6 + 4]} intensity={1.9 * dim} color="#fff0dc" castShadow={hi} shadow-mapSize={[map, map]} shadow-bias={-0.0004}
         shadow-camera-left={-r} shadow-camera-right={r} shadow-camera-top={r} shadow-camera-bottom={-r} shadow-camera-far={40} />
       {hi && <AO />}
-      <FpsWatch />
+      {hi ? <FpsWatch /> : <LiteTicker />}
     </>
   );
 }

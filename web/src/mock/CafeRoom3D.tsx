@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { GLGuard } from "../shared/GLGuard";
 import { Box, C } from "../store3d/Building";
 import { hash } from "../store3d/Figures";
-import { FitControls, Pendant, People, StoreLights, Storefront, ViewBar, WALL_H, Wall, gfxDpr, gfxShadows, useGfx, type Person } from "./Scene3D";
+import { FitControls, Pendant, People, StoreLights, Storefront, ViewBar, WALL_H, Wall, gfxDpr, gfxFrameloop, gfxShadows, useGfx, type Person } from "./Scene3D";
 
 export type LayoutItem = { id: string; type: string; x: number; z: number; rot_deg: number; fits: boolean; w: number; d: number; unassigned?: boolean };
 export type RosterItem = { id: string; role: string; label_ko: string; x: number; z: number; fits: boolean };
@@ -338,7 +338,7 @@ export default function CafeRoom3D({ room, layout, roster = [], occupancy = 0, h
     <div className="cs-3d" style={{ height: height === "fill" ? "100%" : height, borderRadius: height === "fill" ? 0 : undefined }} role="img"
       aria-label="카페 3D 화면. 엔진이 정한 배치대로 창가 바, 테이블과 의자, 키오스크, 카운터의 에스프레소 머신·그라인더·쇼케이스, 뒤쪽 냉장고와 제빙기, 직원과 앉은 손님을 보여 줘요. 공간이 모자라 못 놓은 것은 가게 오른쪽 밖에 빨간 반투명으로 보여요">
       <GLGuard>
-        <Canvas key={gfx} shadows={gfxShadows(gfx)} camera={{ position: [W * 0.55, Math.max(W, D) * 0.95, D * 1.25], fov: 40 }} dpr={gfxDpr(gfx)}>
+        <Canvas key={gfx} frameloop={gfxFrameloop(gfx)} shadows={gfxShadows(gfx)} camera={{ position: [W * 0.55, Math.max(W, D) * 0.95, D * 1.25], fov: 40 }} dpr={gfxDpr(gfx)}>
           <StoreLights w={W} d={D} r={R} />
 
           {/* 바깥 땅과 인도 */}

@@ -7,7 +7,7 @@ import { Html } from "@react-three/drei";
 import { GLGuard } from "../shared/GLGuard";
 import Checks from "./Checks";
 import { Items, Piece, Room } from "./Parts3D";
-import { FitControls, StoreLights, ViewBar, gfxDpr, gfxShadows, useGfx } from "./Scene3D";
+import { FitControls, StoreLights, ViewBar, gfxDpr, gfxFrameloop, gfxShadows, useGfx } from "./Scene3D";
 import {
   CATALOG, DEPOSIT_MONTHS, GRADES, ITEM, cashLeft, eul, fits, footprint, guStat, kitchenSpot, man, nextUid, openingCost, roomSize, snap,
   recommend, storeStats, type CatalogItem, type Grade, type Levers, type Placed, type Profile, type Store,
@@ -186,7 +186,7 @@ export default function Builder({ profile, store, setStore, levers, setLevers, o
       <div className="m-stage">
         <div ref={portal} className="m-canvas">
           <GLGuard>
-            <Canvas key={gfx} shadows={gfxShadows(gfx)} camera={{ position: [w * 0.55, Math.max(w, d) * 0.95, d * 1.25], fov: 38 }} dpr={gfxDpr(gfx)}>
+            <Canvas key={gfx} frameloop={gfxFrameloop(gfx)} shadows={gfxShadows(gfx)} camera={{ position: [w * 0.55, Math.max(w, d) * 0.95, d * 1.25], fov: 38 }} dpr={gfxDpr(gfx)}>
               <Scene portal={portal} store={store} tool={tool} selected={selected} ghost={ghost} onFloorMove={onFloorMove} onFloorClick={onFloorClick}
                 onPick={pick} onTurn={turn} onRemove={remove}
                 onMove={() => { if (sel) { setTool({ kind: "move", uid: sel.uid, id: sel.id, rot: sel.rot }); setGhost(null); setMsg("놓을 자리를 누르세요. R 키로 돌리고 Esc로 그만둬요."); } }} />
