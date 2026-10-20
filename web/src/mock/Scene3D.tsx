@@ -212,6 +212,23 @@ function Warmup({ seconds }: { seconds: number }) {
   });
   return null;
 }
+// a hidden tab draws nothing (the browser holds animation frames), so a screen reached or updated while hidden would stay
+// blank or stale until the next change: draw a frame when the page is shown or focused again
+function WakeOnShow() {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    const wake = () => { if (document.visibilityState === "visible") invalidate(); };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("focus", wake);
+    window.addEventListener("pageshow", wake);
+    return () => {
+      document.removeEventListener("visibilitychange", wake);
+      window.removeEventListener("focus", wake);
+      window.removeEventListener("pageshow", wake);
+    };
+  }, [invalidate]);
+  return null;
+}
 // one frame after every React render of the scene (people seated, items placed, plan changed); the instanced figures
 // change only inside useFrame, which R3F cannot see as a prop change
 function RenderOnUpdate() {
@@ -279,6 +296,7 @@ export function StoreLights({ w, d, r, dim = 1 }: { w: number; d: number; r: num
       {hi && <AO />}
       {hi ? <><FpsWatch /><Warmup seconds={5.5} /></> : <Warmup seconds={1} />}
       <RenderOnUpdate />
+      <WakeOnShow />
     </>
   );
 }
