@@ -349,3 +349,28 @@ export function trdarPicks(code: string): { all: Trdar[]; picks: TrdarPick[] } |
 
 // 자료를 모듈 변수에 들고 있어서, 이 파일이 핫리로드로 새로 불리면 자료가 비는데 화면은 로딩 완료로 남는다. 통째로 다시 불러 맞춘다.
 if (import.meta.hot) import.meta.hot.accept(() => location.reload());
+
+// ---- 동네 사람 (dong_flow.json, pipelines/build_dong_flow.py) -----------------------------------------------------
+// 서울시 상권분석서비스 길단위인구·상주인구·직장인구(행정동, 자치구). 길단위 값은 분기 값이라 하루 값은 분기 값 ÷ 91로 어림한다
+// (같은 자료로 계산한 dong_profile.json의 flow_day와 같은 방식). 추정치이므로 화면에는 '지나가는 사람 하루 약 n명'으로만 적는다.
+export type FlowBlock = { tot: number; male: number | null; age: number[]; band?: number[]; dow?: number[]; q?: string };
+export type FlowRow = { name: string; flow: FlowBlock; resi?: FlowBlock; work?: FlowBlock };
+export type FlowData = { _meta: { quarter: string; age: string[]; band: string[]; dow: string[] }; dong: Record<string, FlowRow>; gu: Record<string, FlowBlock> };
+let FLOW: FlowData | null = null;
+export const setFlowData = (d: FlowData | null) => { FLOW = d; };
+export const flowMeta = () => FLOW?._meta ?? null;
+export const FLOW_DAYS = 91;
+/** 동 코드가 있으면 그 동, 없으면 구의 길단위인구 */
+export function flowOf(code: string | undefined, gu: string): { scope: "dong" | "gu"; row: FlowBlock; resi?: FlowBlock; work?: FlowBlock } | null {
+  if (!FLOW) return null;
+  const d = code ? FLOW.dong[code] : undefined;
+  if (d) return { scope: "dong", row: d.flow, resi: d.resi, work: d.work };
+  const g = FLOW.gu[gu];
+  return g ? { scope: "gu", row: g } : null;
+}
+export const flowPerDay = (f: FlowBlock) => Math.round(f.tot / FLOW_DAYS);
+/** 엔진에 넘길 요일·시간대·연령 비율 (store_input.from_changeup의 flow) */
+export function flowShape(code: string | undefined, gu: string): { dow: number[]; band: number[]; age: number[] } | null {
+  const f = flowOf(code, gu)?.row;
+  return f && f.dow && f.band ? { dow: f.dow, band: f.band, age: f.age } : null;
+}

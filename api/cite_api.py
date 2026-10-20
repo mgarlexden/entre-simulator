@@ -1,4 +1,4 @@
-"""출처 검색 API (목업 챗봇용). 실행: python -m uvicorn api.cite_api:app --port 8001
+"""출처 검색 API (목업 챗봇용). 실행: python -m uvicorn api.cite_api:app --port 8000
 
 ontology/sources.csv 에서 공신력 있는 출처만 골라 질문과 가장 가까운 것을 돌려준다.
 - 포함: 논문(paper), 공공데이터(public_data), 공공기관 보고서(report)

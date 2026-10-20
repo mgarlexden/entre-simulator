@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { GLGuard } from "../shared/GLGuard";
 import { Box, C } from "../store3d/Building";
 import { hash } from "../store3d/Figures";
-import { FitControls, Pendant, People, StoreLights, Storefront, ViewBar, WALL_H, Wall, gfxDpr, gfxFrameloop, gfxShadows, useGfx, type Person } from "./Scene3D";
+import { FitControls, FrontFade, Pendant, People, StoreLights, Storefront, ViewBar, WALL_H, Wall, gfxDpr, gfxFrameloop, gfxShadows, useGfx, type Person } from "./Scene3D";
 
 export type LayoutItem = { id: string; type: string; x: number; z: number; rot_deg: number; fits: boolean; w: number; d: number; unassigned?: boolean };
 export type RosterItem = { id: string; role: string; label_ko: string; x: number; z: number; fits: boolean };
@@ -349,7 +349,8 @@ export default function CafeRoom3D({ room, layout, roster = [], occupancy = 0, h
             <Box p={[-W / 2 + 0.005, 0.45, 0]} s={[0.02, 0.9, D]} color={ROOM.wainscot} />
           </Wall>
           <Wall p={[W / 2 + 0.06, WALL_H / 2, 0]} s={[0.12, WALL_H, D]} color={ROOM.wall} outside={(c) => c.x > W / 2} />
-          <Storefront x0={-W / 2} x1={W / 2} z={D / 2} door={door} />
+          {/* 줌인하면 손님 쪽 앞벽(유리 전면)이 흐려져 안쪽 배치가 보인다 (고깃집과 같은 방식) */}
+          <FrontFade z={D / 2}><Storefront x0={-W / 2} x1={W / 2} z={D / 2} door={door} /></FrontFade>
           {[door.x - door.w / 2 - 0.35, door.x + door.w / 2 + 0.35].filter((x) => x > -W / 2 && x < W / 2 + 1).map((x) => (
             <group key={x} position={[x, 0, D / 2 + 0.35]}>
               <Cy p={[0, 0.2, 0]} r={0.17} r2={0.14} h={0.4} color="#b9836a" />

@@ -9,6 +9,7 @@ fixtures:
   shop:
     gu: 마포구
     dong: 서교동
+    dong_code: "11440660"
     area_type: 대학·청년
     pyeong: 15
     tables: 5
@@ -107,3 +108,13 @@ questions:
   - {id: q38_hansik_seoul, q: "한식 매출은 평균 얼마예요", expect: ["서울 전체", "2,501만원"]}
   - {id: q39_price_now, q: "삼겹살 도매가는 요즘 얼마예요", expect: ["도매"], forbid: ["재고"], cite: [kape_pork]}
   - {id: q40_my_area, q: "이 동네 경쟁은 어때요?", ctx: shop, expect: ["서교동", "곳"], cite: [app]}
+  # --- 동네 사람 (길단위인구·상주·직장인구). 자료에 없는 말은 '이 동네'만 겹쳐도 답하지 않는다
+  - {id: q41_work_pop, q: "이 동네 직장인구는 얼마야", ctx: shop, expect: ["서교동", "직장인", "명"], cite: [seoul_flow]}
+  - {id: q42_flow_here, q: "이 동네 지나가는 사람은 몇 명이야", ctx: shop, expect: ["서교동", "유동인구", "하루 약", "추정"], cite: [seoul_flow]}
+  - {id: q43_resi_named, q: "망원동 상주인구", expect: ["망원", "거주민"], cite: [seoul_flow]}
+  - {id: q44_gu_flow, q: "강남구 유동인구는?", expect: ["강남구", "하루 약"], cite: [seoul_flow]}
+  - {id: q45_type_here, q: "이 동네 유형은?", ctx: shop, expect: ["대학·청년", "유형"], cite: [app]}
+  - {id: q46_unknown_here, q: "이 동네 반려견 수는?", ctx: shop, none: true}
+  - {id: q47_flow_noplace, q: "직장인구는?", none: true}
+  - {id: q48_flow_word, q: "이 동네 유동인구는 몇 명이야", ctx: shop, expect: ["서교동", "유동인구", "하루 약"], cite: [seoul_flow]}
+  - {id: q49_resident, q: "이 동네 거주민은 몇 명이야", ctx: shop, expect: ["서교동", "거주민"], cite: [seoul_flow]}

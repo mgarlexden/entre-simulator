@@ -36,6 +36,7 @@ FAMILIES: dict[str, tuple[str, ...]] = {
     "cafe_menu_price": ("cafe_menu_price",),  # 카페 메뉴 가격
     "cost": ("kosis_", "cafe_cost_"),
     "myshop": ("live_", "cafe_myshop"),
+    "flow": ("flow_", "live_flow", "live_type"),
 }
 TOPIC_RE: list[tuple[str, re.Pattern]] = [
     ("weather", re.compile(r"날씨|기온|장마|강수|소나기|비가|비 ?(오|와|온|올|내)|눈이|눈 ?(오|와|온)|더위|추위|한파|폭염")),
@@ -52,6 +53,7 @@ TOPIC_RE: list[tuple[str, re.Pattern]] = [
     ("food_price", re.compile(r"상추|깻잎|당근|배추|양배추|양파|감자|고구마|대파|쪽파|마늘|고추|오이|호박|버섯|시금치|토마토|부추|미나리|"
                               r"생강|브로콜리|파프리카|피망|열무|채소|야채|쌀|현미|콩|팥|녹두|밀가루|식용유|설탕|계란|달걀")),
     ("sales", re.compile(r"매출|객단가|폐업|생존|문 ?닫|결제|한식음식점")),
+    ("flow", re.compile(r"유동|지나가|지나다|인구|직장인|일하러|상주|거주|주민|사는 ?사람|연령|나이대|성별|남성|여성|남자|여자|[1-6]0대|시간대|요일|붐비|북적")),
     ("neighborhood", re.compile(r"동네|행정동|유형")),
     ("cost", re.compile(r"영업이익률|원가율|마진|비용 ?구조|비율|퍼센트|몇 ?%|몇 ?프로")),
     ("myshop", re.compile(r"이 ?(동네|구|지역)|내 ?(가게|점포|조건)|제 ?가게|우리 ?가게|입력한|내가|제가|본전|회수|되찾|흑자|적자|몇 ?달|개월|영업이익(?!률)|"
@@ -216,6 +218,8 @@ def static_facts() -> tuple[list[dict], dict]:
                     "title": src, "api": "카페 리서치 정리본 (cafe_cost.json)", "url": "", "period": "2025~2026년"}
 
     sources = {**a["sources"], **b["sources"]}
+    sources[FLOW_SRC] = {"title": "서울시 상권분석서비스 길단위인구·상주인구·직장인구 (행정동, 자치구)", "publisher": "서울특별시 열린데이터광장",
+                         "period": "2026년 2분기", "url": "https://data.seoul.go.kr/", "api": "VwsmAdstrdFlpopW, VwsmAdstrdRepopW, VwsmAdstrdWrcPopltnW, VwsmSignguFlpopW"}
     if c.get("sources"):
         sources.update(c["sources"])
     if d.get("sources"):
@@ -229,6 +233,79 @@ def static_facts() -> tuple[list[dict], dict]:
 
 def dong_names() -> set[str]:
     return {f["tags"][0] for f in _load("facts_changeup.json")["facts"] if f["id"].startswith("dong_") and f["id"] != "dong_type_rule"}
+
+
+# ---------------------------------------------------------------- 동네 사람 (dong_flow.json, pipelines/build_dong_flow.py)
+FLOW_DAYS = 91   # 길단위인구는 분기 값이라 하루 값은 ÷91로 어림한다 (화면 area.ts 와 같다)
+FLOW_SRC = "seoul_flow"
+
+
+def _people(n: float) -> str:
+    n = round(n)
+    return f"{round(n / 1000) / 10:g}만 명" if n >= 10000 else f"{n:,}명"
+
+
+def _flow_facts(key: str, name: str, row: dict, meta: dict) -> list[dict]:
+    """한 동(또는 구)의 사람 근거 문장. 지나가는 사람 / 사는 사람 / 일하러 오는 사람을 따로 만들어 질문이 맞는 것만 골라지게 한다."""
+    out: list[dict] = []
+    f = row.get("flow") or row
+    ages, bands, dows = meta["age"], meta["band"], meta["dow"]
+    top = lambda v, labels: labels[max(range(len(v)), key=v.__getitem__)]
+    if f.get("tot"):
+        t = f"{name}의 유동인구는 하루 약 {_people(f['tot'] / FLOW_DAYS)}이에요(서울시 길단위인구 {meta['quarter'][:4]}년 {meta['quarter'][4]}분기로 어림한 추정이고, 같은 사람이 여러 번 세어질 수 있어요)."
+        if f.get("male") is not None:
+            t += f" 남성 {round(f['male'] * 100)}%, 여성 {round((1 - f['male']) * 100)}%예요."
+        if f.get("age"):
+            t += f" 가장 많은 연령대는 {yeyo(top(f['age'], ages))}."
+        if f.get("band"):
+            t += f" 가장 붐비는 시간대는 {top(f['band'], bands)}시, 요일은 {top(f['dow'], dows)}요일이에요." if f.get("dow") else f" 가장 붐비는 시간대는 {top(f['band'], bands)}시예요."
+        out.append({"id": f"flow_{key}", "tags": [name, "유동인구", "유동", "지나가는", "지나가는 사람", "인구", "길단위", "성별", "연령", "시간대", "요일", "하루"],
+                    "text": t, "sources": [FLOW_SRC]})
+    for kind, label, tags in (("resi", "거주민", ["상주인구", "거주민", "사는", "주민", "거주"]), ("work", "직장인", ["직장인구", "직장인", "일하는", "일하러", "출근"])):
+        b = row.get(kind)
+        if b and b.get("tot"):
+            t = f"{name}의 {label}(" + ("상주인구" if kind == "resi" else "직장인구") + f")은 약 {_people(b['tot'])}이에요."
+            if b.get("male") is not None:
+                t += f" 남성 {round(b['male'] * 100)}%, 여성 {round((1 - b['male']) * 100)}%예요."
+            if b.get("age"):
+                t += f" 가장 많은 연령대는 {yeyo(top(b['age'], ages))}."
+            out.append({"id": f"flow_{kind}_{key}", "tags": [name, "인구", *tags], "text": t, "sources": [FLOW_SRC]})
+    return out
+
+
+def flow_named(q: str, ctx: dict | None) -> list[dict]:
+    """질문에 이름이 나온 동·구의 사람 근거. 같은 이름의 동이 여럿이면 화면에서 고른 동을 먼저 둔다."""
+    d = _load("dong_flow.json")
+    if not d.get("dong"):
+        return []
+    meta, out = d["_meta"], []
+    code = (ctx or {}).get("dong_code")
+    for c, row in d["dong"].items():
+        nm = row["name"]
+        if nm in q or (re.sub(r"[0-9·.]+", "", nm) in q and re.search(r"[가-힣]{2,}동", nm) and len(re.sub(r"[0-9·.]+", "", nm)) >= 3):
+            if c == code or not code or d["dong"].get(code, {}).get("name") != nm:
+                out += _flow_facts(c, nm, row, meta)
+    for g, row in d.get("gu", {}).items():
+        if g in q:
+            out += _flow_facts(f"gu_{g}", g, {"flow": row}, meta)
+    return out
+
+
+def flow_here(ctx: dict | None) -> list[dict]:
+    """화면의 동네(ctx.dong_code, 없으면 구)의 사람. '이 동네 직장인구는?' 같은 질문용."""
+    if not ctx:
+        return []
+    d = _load("dong_flow.json")
+    if not d.get("dong"):
+        return []
+    code, gu = ctx.get("dong_code"), ctx.get("gu")
+    if code and code in d["dong"]:
+        facts = _flow_facts(code, d["dong"][code]["name"], d["dong"][code], d["_meta"])
+    elif gu and gu in d.get("gu", {}):
+        facts = _flow_facts(f"gu_{gu}", gu, {"flow": d["gu"][gu]}, d["_meta"])
+    else:
+        return []
+    return [{**f, "id": "live_" + f["id"], "tags": [*f["tags"], "이 동네", "동네", "내가게"]} for f in facts]
 
 
 # ---------------------------------------------------------------- 화면이 보낸 값으로 만드는 문장
@@ -266,6 +343,9 @@ def live_facts(ctx: dict | None) -> list[dict]:
         add("shop", ["점포", "직원", "알바", "인원", "평수", "테이블", "좌석", "규모", "몇 명", "몇 평"],
             f"지금 입력한 가게는 {where}에 {p}평, 테이블 {ctx.get('tables', '?')}개({ctx.get('seats', '?')}석), 직원 {ctx.get('staff', '?')}명이에요."
             + (f" 동네 유형은 {ctx['area_type']}이에요." if ctx.get("area_type") else ""))
+    if ctx.get("area_type"):
+        add("type", ["유형", "동네 유형", "동네", "이 동네", "특성", "성격"],
+            f"{where or '이 동네'}의 유형은 {yeyo(ctx['area_type'])}.")
     if ctx.get("pork_area") is not None or ctx.get("pork_gu") is not None:
         n = ctx.get("pork_area") if ctx.get("pork_area") is not None else ctx.get("pork_gu")
         st = f", 한식음식점 {ctx['stores_area']:,}곳" if ctx.get("stores_area") else ""
@@ -356,6 +436,29 @@ def allowed_ids(fid: str, tps: set[str], q: str) -> bool:
     return False
 
 
+GENERIC = ("동네", "가게", "점포", "우리", "내가", "제가", "내가게", "이번", "지금", "현재", "여기", "알려", "얼마", "어때", "어떤", "어떻", "어디", "무엇", "뭐",
+           "많이", "제일", "가장", "얼마나", "있어", "있나", "인가", "이에", "예요", "해줘", "좀", "그리고", "그럼", "그러면", "하면", "되나", "될까", "시작",
+           "남기", "남아", "남나", "달째", "개월", "부터", "몇", "정도", "대비", "기준", "비교", "해서", "하는", "하고", "한테", "에서", "으로", "에게", "때문", "경우", "이후", "이전")
+
+
+def specific_words(q: str, near: set[str]) -> list[str]:
+    """질문에서 '이 동네' 같은 흔한 말과 동 이름을 빼고 남은 핵심 낱말(조사 뗀 앞 2글자 이상)."""
+    out = []
+    for t in re.findall(r"[0-9A-Za-z가-힣]+", q):
+        if len(t) < 2 or t.startswith(GENERIC) or any(t.startswith(d[:2]) and d in q for d in near):
+            continue
+        if re.search(r"\d", t) or re.fullmatch(r"[가-힣]{1,3}구", t) or re.fullmatch(r"[가-힣]{2,5}동", t):
+            continue
+        out.append(t)
+    return out
+
+
+def covers(f: dict, keys: list[str]) -> bool:
+    """근거의 문장·태그에 핵심 낱말(또는 앞 2글자)이 하나라도 있는가."""
+    hay = f["text"] + " " + " ".join(f.get("tags", []))
+    return any(k in hay or k[:2] in hay for k in keys)
+
+
 def run(q: str, ctx: dict | None = None, k: int = 3) -> dict:
     from api import cite_api as C   # 늦게 불러서 순환 import를 피한다
 
@@ -380,9 +483,19 @@ def run(q: str, ctx: dict | None = None, k: int = 3) -> dict:
                 return {"answer": None, "facts": [], "citations": [], "message": ask_back}
 
     pool = stat + live
+    if "flow" in tps:
+        pool = pool + flow_named(q, ctx) + flow_here(ctx)
     if not named_dong and "neighborhood" not in tps:
         pool = [f for f in pool if not f["id"].startswith(("dong_", "rent_dong_"))]
     pool = [f for f in pool if allowed_ids(f["id"], tps, q) or f["id"].startswith("live_") and "myshop" in tps]
+    if "flow" in tps:
+        # 사람 수 질문은 사람 근거만 쓴다. 이름이 나온 동이 없고 화면의 동네도 모르면 다른 주제의 문장으로 대신하지 않는다.
+        pool = [f for f in pool if f["id"].startswith(("flow_", "live_flow_"))]
+        if not pool:
+            return {"answer": None, "facts": [], "citations": [], "message": "어느 동네의 인구인지 알려 주세요. 예: \"망원동 직장인구는?\" 또는 동네 분석에서 동네를 고른 뒤 \"이 동네 직장인구는?\" 이라고 물어 주세요."}
+        if OWN.search(q):
+            here = [f for f in pool if f["id"].startswith("live_")]
+            pool = here or pool
     cafe_q, meat_q = bool(CAFE_Q.search(q)), bool(MEAT_Q.search(q))
     if cafe_q and not meat_q:
         pool = [f for f in pool if not MEAT_ID.match(f["id"]) and not MEAT_TEXT.search(f["text"])]
@@ -422,6 +535,10 @@ def run(q: str, ctx: dict | None = None, k: int = 3) -> dict:
         # 범위 밖 질문이면 명확하게 답변
         if OFFTOPIC.search(q):
             return {"answer": None, "facts": [], "citations": [], "message": OFF_MESSAGE}
+        return {"answer": None, "facts": [], "citations": [], "message": NONE_MESSAGE}
+    # 질문의 핵심 낱말(직장인구, 유형 등)이 고른 근거 어디에도 없으면, '이 동네' 같은 말만 겹친 것이라 답하지 않는다.
+    keys = specific_words(q, near)
+    if keys and not any(covers(f, keys) for _, f in ranked[:k]):
         return {"answer": None, "facts": [], "citations": [], "message": NONE_MESSAGE}
     hits, seen = [], set()
     for sim, f in ranked:

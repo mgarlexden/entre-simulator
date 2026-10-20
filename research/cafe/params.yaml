@@ -145,7 +145,7 @@ opex:
     note: "사장님 인건비 포함 여부는 기사에 없음. 서울시 2024 프랜차이즈 실태조사 커피 9.5%는 사장님 인건비 제외"
 
 season:   # step 3 월별 운영 (sim/cafe/season.py). Every effect size here is 가정 unless a source is named.
-  months: {value: 12, grade: 가정, source: "none", note: "한 시즌 = 12개월"}
+  months: {value: 6, grade: 가정, source: "none", note: "한 시즌 = 6개월 (고깃집 시즌과 맞춤, 2026-10-20 결정). 건희 원안은 12개월"}
   start_month: {value: 3, grade: 가정, source: "none", note: "기본 오픈 달 3월 (대학가 개강), 요청에서 바꿀 수 있음"}
   seasonality_by_quarter:
     value: {1: 0.92, 2: 1.02, 3: 1.07, 4: 1.00}
@@ -249,28 +249,137 @@ season:   # step 3 월별 운영 (sim/cafe/season.py). Every effect size here is
   scenario_points:
     grade: 가정
     source: "none"
-    note: "매달 두 가지 상황에서 사장님이 대응을 고름 (고깃집의 '토요일 밤 대응'에 해당). 효과 크기는 모두 가정이고 한 달 합계에 한 번 적용. walk_recover = 돌아가는 손님 중 붙잡는 비율, demand_mult = 그달 손님 배수, ticket_mult = 객단가 배수, cost_krw = 그달 비용"
+    note: "달별 사건 (2026-10-20): 한 달에 하나, 그 달의 달력에 맞춘 사건에서 사장님이 대응을 고름. 시즌이 6개월이어도 시작 달을 고를 수 있어 12개월 모두 있음. 효과 크기는 모두 가정. demand_mult = 그달 손님 배수, walk_recover = 돌아가는 손님 중 붙잡는 비율, ticket_mult = 객단가 배수, cost_krw = 그달 비용(음수는 절감), satisfaction = 그달 만족도 가감"
     value:
-      - id: peak_line
-        clock: "토·일 14시"
-        title: "주말 오후, 줄이 문 밖까지 길어요"
-        prompt: "주문이 몰려 기다리다 돌아가는 손님이 생겨요."
-        count: 8
+      - id: cold_heat
+        month: 1
+        clock: "한 달"
+        title: "한파와 난방비"
+        prompt: "한파가 이어져 외출하는 사람이 줄고 난방비가 올랐습니다."
+        note: "한파가 이어지는 달로 가정"
         default: hold
         options:
-          - {id: hold, label: "그대로 둔다", hint: "비용이 들지 않아요.", downside: "돌아가는 손님은 그대로예요.", walk_recover: 0.0, cost_krw: 0}
-          - {id: extra_hand, label: "임시 아르바이트를 부른다", hint: "돌아가는 손님의 30%를 붙잡아요.", downside: "주말 8일 알바비 48만원이 들어요.", walk_recover: 0.30, cost_krw: 480000}
-          - {id: preorder, label: "번호표와 모바일 선주문으로 나눈다", hint: "돌아가는 손님의 12%를 붙잡아요.", downside: "선주문 수수료로 객단가가 1% 줄어요.", walk_recover: 0.12, ticket_mult: 0.99}
-      - id: slow_noon
-        clock: "평일 14시"
-        title: "평일 낮, 손님이 뜸해요"
-        prompt: "의자가 반쯤 비어 있어요."
-        count: 18
+          - {id: hold, label: "그대로 둔다", hint: "추가 노력이 없다", downside: "손님이 4% 줄고 난방비 25만원이 더 든다", demand_mult: 0.96, cost_krw: 250000}
+          - {id: short, label: "단축 영업한다", hint: "난방과 인건비를 아낀다", downside: "영업시간이 줄어 손님이 7% 줄어든다", demand_mult: 0.93, cost_krw: 120000}
+          - {id: warm, label: "따뜻한 음료 이벤트를 연다", hint: "손님 감소가 1%로 줄어든다", downside: "난방비와 이벤트 비용 35만원이 든다", demand_mult: 0.99, cost_krw: 350000}
+      - id: valentine
+        month: 2
+        clock: "한 달"
+        title: "방학·졸업 철, 발렌타인"
+        prompt: "방학과 졸업으로 학생 손님이 줄었고, 발렌타인 주간이 다가옵니다."
+        note: "학생 손님이 줄어드는 달로 가정"
         default: hold
         options:
-          - {id: hold, label: "그대로 둔다", hint: "비용이 들지 않아요.", downside: "한가한 시간은 그대로예요.", demand_mult: 1.0, cost_krw: 0}
-          - {id: coupon, label: "낮 시간 쿠폰을 뿌린다", hint: "그달 손님이 4% 늘어요.", downside: "쿠폰 비용 10만원, 객단가 3% 줄어요.", demand_mult: 1.04, ticket_mult: 0.97, cost_krw: 100000}
-          - {id: study, label: "작업·공부 좌석으로 알린다", hint: "그달 손님이 3% 늘어요.", downside: "음료 한 잔으로 오래 앉아 객단가가 2% 줄어요.", demand_mult: 1.03, ticket_mult: 0.98}
+          - {id: hold, label: "그대로 둔다", hint: "추가 비용이 없다", downside: "학생 손님이 줄어 손님이 6% 감소한다", demand_mult: 0.94}
+          - {id: event, label: "발렌타인 디저트 이벤트를 연다", hint: "손님 감소가 2%로 줄고 객단가가 오른다", downside: "재료와 홍보로 20만원이 든다", demand_mult: 0.98, ticket_mult: 1.01, cost_krw: 200000}
+      - id: semester
+        month: 3
+        clock: "한 달"
+        title: "개강, 공부 손님 증가"
+        prompt: "개강으로 노트북을 펴고 오래 앉는 손님이 늘었습니다."
+        note: "개강 달로 가정"
+        default: hold
+        options:
+          - {id: hold, label: "그대로 둔다", hint: "손님이 3% 늘어난다", downside: "오래 앉는 손님이 많아 객단가는 그대로다", demand_mult: 1.03}
+          - {id: study, label: "콘센트 좌석을 안내한다", hint: "공부 손님이 더 와 손님이 7% 늘어난다", downside: "한 잔으로 오래 앉아 객단가가 2% 줄고, 멀티탭에 6만원이 든다", demand_mult: 1.07, ticket_mult: 0.98, cost_krw: 60000}
+          - {id: turnover, label: "회전율을 우선한다", hint: "손님 증가는 3%지만 객단가가 오른다", downside: "오래 앉는 손님이 아쉬워한다 (만족 −0.03)", demand_mult: 1.03, ticket_mult: 1.01, satisfaction: -0.03}
+      - id: midterm
+        month: 4
+        clock: "한 달"
+        title: "중간고사, 장시간 자리 점유"
+        prompt: "중간고사 기간이라 오래 앉는 손님이 자리를 채웁니다."
+        note: "중간고사가 있는 달로 가정"
+        default: allow
+        options:
+          - {id: allow, label: "마음껏 앉게 둔다", hint: "손님이 4% 늘어난다", downside: "객단가가 3% 줄고 돌아가는 손님이 생긴다", demand_mult: 1.04, ticket_mult: 0.97}
+          - {id: limit, label: "시간 제한을 안내한다", hint: "자리가 돌아 돌아가는 손님의 10%를 붙잡는다", downside: "오래 앉던 손님이 불편해한다 (만족 −0.03)", demand_mult: 1.0, walk_recover: 0.1, satisfaction: -0.03}
+      - id: family_takeout
+        month: 5
+        clock: "한 달"
+        title: "가정의 달, 나들이 테이크아웃 폭주"
+        prompt: "가정의 달 나들이로 테이크아웃 주문이 한꺼번에 몰립니다."
+        note: "가정의 달로 가정"
+        default: hold
+        options:
+          - {id: hold, label: "그대로 받는다", hint: "손님이 4% 늘어난다", downside: "줄이 길어 돌아가는 손님이 생긴다", demand_mult: 1.04}
+          - {id: extra_hand, label: "임시 알바를 쓴다", hint: "돌아가는 손님의 35%를 붙잡는다", downside: "임시 알바비 45만원이 든다", demand_mult: 1.04, walk_recover: 0.35, cost_krw: 450000}
+          - {id: limit, label: "주문을 제한한다", hint: "돌아가는 손님의 15%를 붙잡는다", downside: "받는 주문을 줄여 손님 증가가 사라진다", demand_mult: 1.0, walk_recover: 0.15}
+      - id: jangma
+        month: 6
+        clock: "한 달"
+        title: "장마로 손님 감소"
+        prompt: "장마가 시작돼 비 오는 날 손님이 줄었습니다."
+        note: "장마철로 가정"
+        default: hold
+        options:
+          - {id: hold, label: "그대로 둔다", hint: "추가 비용이 없다", downside: "손님이 7% 줄어든다", demand_mult: 0.93}
+          - {id: coupon, label: "비 오는 날 쿠폰을 낸다", hint: "손님 감소가 3%로 줄어든다", downside: "쿠폰으로 객단가가 2% 줄고 12만원이 든다", demand_mult: 0.97, ticket_mult: 0.98, cost_krw: 120000}
+          - {id: delivery, label: "배달을 시작한다", hint: "손님 감소가 2%로 줄어든다", downside: "배달 대행과 포장재로 25만원이 들고 객단가가 3% 줄어든다", demand_mult: 0.98, ticket_mult: 0.97, cost_krw: 250000}
+      - id: ice_rush
+        month: 7
+        clock: "한 달"
+        title: "폭염, 아이스 주문 폭주"
+        prompt: "폭염으로 아이스 음료 주문이 몰려 제빙과 추출이 따라가지 못합니다."
+        note: "폭염이 이어지는 달로 가정"
+        default: limit
+        options:
+          - {id: limit, label: "주문을 제한한다", hint: "비용이 없고 돌아가는 손님의 10%를 붙잡는다", downside: "손님 증가가 2%에 그친다", demand_mult: 1.02, walk_recover: 0.1}
+          - {id: ice, label: "제빙기를 증설한다", hint: "손님이 5% 늘고 돌아가는 손님의 30%를 붙잡는다", downside: "임대와 전기료로 30만원이 든다", demand_mult: 1.05, walk_recover: 0.3, cost_krw: 300000}
+          - {id: hand, label: "임시 알바를 쓴다", hint: "손님이 5% 늘고 돌아가는 손님의 20%를 붙잡는다", downside: "임시 알바비 20만원이 든다", demand_mult: 1.05, walk_recover: 0.2, cost_krw: 200000}
+      - id: vacation
+        month: 8
+        clock: "한 달"
+        title: "휴가철, 직원 휴가"
+        prompt: "직원 한 명이 휴가를 쓰고 싶다고 합니다."
+        note: "휴가철로 가정"
+        default: refuse
+        options:
+          - {id: allow, label: "휴가를 준다", hint: "직원이 쉬고 관계가 좋아진다", downside: "일손이 모자라 손님이 3% 줄어든다", demand_mult: 0.97, satisfaction: 0.02}
+          - {id: sub, label: "대타를 불러 휴가를 준다", hint: "일손이 그대로다", downside: "대타 비용 20만원이 든다", demand_mult: 1.0, cost_krw: 200000}
+          - {id: refuse, label: "휴가를 미룬다", hint: "비용이 없다", downside: "직원이 지쳐 서비스가 거칠어진다 (만족 −0.05)", demand_mult: 1.0, satisfaction: -0.05}
+      - id: chuseok
+        month: 9
+        clock: "한 달"
+        title: "추석 연휴 영업 여부"
+        prompt: "추석 연휴가 다가옵니다. 연휴에 문을 열지 정해야 합니다."
+        note: "추석 연휴가 이 달에 있다고 가정"
+        default: open
+        options:
+          - {id: open, label: "연다", hint: "연휴 손님을 받는다", downside: "연휴라 손님이 7% 줄지만 인건비는 그대로다", demand_mult: 0.93}
+          - {id: short, label: "단축해서 연다", hint: "인건비를 아낀다", downside: "손님이 10% 줄어든다", demand_mult: 0.9, cost_krw: -100000}
+          - {id: close, label: "쉰다", hint: "인건비를 아끼고 직원이 쉰다 (만족 +0.05)", downside: "연휴 매출이 없어 손님이 14% 줄어든다", demand_mult: 0.86, cost_krw: -200000, satisfaction: 0.05}
+      - id: autumn_menu
+        month: 10
+        clock: "한 달"
+        title: "가을 시즌 신메뉴"
+        prompt: "가을 시즌 신메뉴를 낼 수 있는 시기입니다."
+        note: "가을 시즌으로 가정"
+        default: keep
+        options:
+          - {id: keep, label: "기존 메뉴를 유지한다", hint: "추가 비용이 없다", downside: "새 손님을 끌 기회를 놓친다", demand_mult: 1.0}
+          - {id: launch, label: "신메뉴를 출시한다", hint: "손님이 5% 늘고 객단가가 2% 오른다", downside: "재료와 홍보로 20만원이 든다", demand_mult: 1.05, ticket_mult: 1.02, cost_krw: 200000}
+      - id: bean_price
+        month: 11
+        clock: "한 달"
+        title: "원두 가격 인상"
+        prompt: "원두 가격이 올라 원가가 부담됩니다."
+        note: "원두 가격이 오른 달로 가정"
+        default: absorb
+        options:
+          - {id: absorb, label: "참는다", hint: "가격을 그대로 둔다", downside: "원가 상승분 35만원을 떠안는다", cost_krw: 350000}
+          - {id: raise, label: "가격을 올린다", hint: "객단가가 5% 오른다", downside: "손님이 3% 줄고 원가 상승분 35만원도 든다", demand_mult: 0.97, ticket_mult: 1.05, cost_krw: 350000}
+          - {id: switch, label: "원두를 바꾼다", hint: "원가 상승분이 15만원으로 줄어든다", downside: "맛이 달라져 단골이 아쉬워한다 (만족 −0.05)", cost_krw: 150000, satisfaction: -0.05}
+      - id: year_end
+        month: 12
+        clock: "한 달"
+        title: "연말 모임과 케이크 예약"
+        prompt: "연말이라 단체 모임 문의와 케이크 예약이 들어옵니다."
+        note: "연말 달로 가정"
+        default: general
+        options:
+          - {id: general, label: "일반 손님을 우선한다", hint: "손님이 2% 늘어난다", downside: "단체와 예약 매출을 놓친다", demand_mult: 1.02}
+          - {id: seat, label: "자리를 붙여 단체를 받는다", hint: "손님이 6% 늘고 객단가가 2% 오른다", downside: "시끄러워 일반 손님이 불편해한다 (만족 −0.03)", demand_mult: 1.06, ticket_mult: 1.02, satisfaction: -0.03}
+          - {id: cake, label: "케이크 예약을 받는다", hint: "손님이 4% 늘고 객단가가 5% 오른다", downside: "재료와 폐기로 15만원이 든다", demand_mult: 1.04, ticket_mult: 1.05, cost_krw: 150000}
 
 defaults:
   own_capital_krw: 80000000

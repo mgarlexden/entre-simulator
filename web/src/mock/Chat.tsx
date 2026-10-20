@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cashLeft, guStat, iga, man, openingCost, rankOf, storeStats, type Gu, type Levers, type Profile, type ShockId, type Store } from "./model";
 import { getEngineCtx } from "./chatContext";
+import { profileOf } from "./area";
 import "./cite.css";
 
 type Cite = { id: string; title: string; publisher: string; year: string; type: string; url: string; note: string };
@@ -27,7 +28,8 @@ export default function Chat({ profile, store, levers, gus, onClose }: {
     const cost = openingCost(store, profile.gu, profile.keyMoney ?? 0);
     const engine = getEngineCtx();
     return {
-      gu: profile.gu, dong: st.area ?? undefined, area_type: st.areaType ?? undefined,
+      gu: profile.gu, dong: st.area ?? undefined,
+      dong_code: profile.dong && profile.dong.gu === profile.gu ? profileOf(profile.gu, profile.dong.name)?.code : undefined, area_type: st.areaType ?? undefined,
       pyeong: store.pyeong, tables: s.tables, seats: s.seats, staff: levers.staff,
       rent: st.rent, rent_src: st.rentSrc,
       opening_total: cost.total, deposit: cost.lines.find((l) => l.key === "deposit")?.amount,

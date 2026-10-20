@@ -35,6 +35,34 @@ export function Wall({ p, s, color, outside, children }: {
   );
 }
 
+// 줌인하면 손님 쪽 앞벽(유리 전면과 간판)이 희미해졌다가 사라지고, 줌아웃하면 돌아온다. 가게 안 배치를 가까이서 볼 수 있게 한다.
+// 거리 비율 = 카메라와 목표 사이 거리 ÷ 처음 맞춘 거리(FitControls가 적는 fitInfo.dist). FADE_START보다 가까우면 흐려지기 시작해 FADE_END에서 사라진다.
+// 앞쪽(z > 앞벽)에서 볼 때만 적용한다. 장면이 '바뀐 것이 있을 때만 그리기'라서 카메라가 움직여 다시 그릴 때만 계산된다.
+export const fitInfo = { dist: 0 };
+const FADE_START = 0.95, FADE_END = 0.72;
+export function FrontFade({ z, children }: { z: number; children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  const controls = useThree((s) => s.controls) as { target: THREE.Vector3 } | null;
+  useFrame(({ camera }) => {
+    const g = ref.current;
+    if (!g || !controls || !fitInfo.dist) return;
+    const ratio = camera.position.distanceTo(controls.target) / fitInfo.dist;
+    const t = camera.position.z > z ? THREE.MathUtils.clamp((FADE_START - ratio) / (FADE_START - FADE_END), 0, 1) : 0;
+    const f = 1 - t;
+    g.visible = f > 0.04;
+    if (!g.visible) return;
+    g.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      if (!m) return;
+      for (const x of Array.isArray(m) ? m : [m]) {
+        const d = (x.userData.fade ??= { op: x.opacity, tr: x.transparent, dw: x.depthWrite });
+        x.opacity = d.op * f; x.transparent = f < 1 || d.tr; x.depthWrite = f < 1 ? false : d.dw;
+      }
+    });
+  });
+  return <group ref={ref}>{children}</group>;
+}
+
 // Glass front along z, from x0 to x1, with the door gap (door.x = gap centre). Thin frame so it barely hides the room.
 export function Storefront({ x0, x1, z, door, frame = "#4f555c", mat = true }: { x0: number; x1: number; z: number; door: { x: number; w: number }; frame?: string; mat?: boolean }) {
   const H = WALL_H;
@@ -339,6 +367,7 @@ export function FitControls({ box, dir = [0.55, 0.95, 1.25], pad = 1.25, lift = 
       ctl.current.update();
     }
     setDist(d);
+    fitInfo.dist = d;
     invalidate();
     // dir is a constant per caller; the box is compared by value
     // eslint-disable-next-line react-hooks/exhaustive-deps

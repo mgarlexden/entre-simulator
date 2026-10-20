@@ -187,7 +187,7 @@ drinks/h and seating binds on the 20평 sample; the schedule then needs 2~3 peop
 
 ## Step 3 월별 운영: `/cafe/season`
 
-Code: `sim/cafe/season.py` (pure; a run is a JSON-able dict), routes in `api/cafe.py`. A run plays 12 months of the store
+Code: `sim/cafe/season.py` (pure; a run is a JSON-able dict), routes in `api/cafe.py`. A run plays 6 months (`season.months`, 건희 원안 12개월에서 고깃집과 맞춰 2026-10-20에 줄임) of the store
 from step 2. Same body + same `seed` + same month decisions = the same months, byte for byte. Events are drawn per
 (seed, month, event), so a decision never changes which events happen, only what they do (the one exception: a bigger
 marketing budget raises the odds of the SNS event). Runs live in the API process memory: a restart forgets them, and
@@ -244,7 +244,7 @@ Body (every field optional; an empty body or no body plays the month with last m
 | `dessert` | true / false | Kept until changed; default true |
 | `month_index` | 0-based month this request is for | Optional. A repeat of a played month with the same decisions returns that month again (a retry after a timeout); any other mismatch is 409 `{error: "month_mismatch", month_index, months_played}` |
 
-409 `{error: "season_over", detail, months_played}` once the run is closed or all 12 months are played. 404 for an
+409 `{error: "season_over", detail, months_played}` once the run is closed or all months (6) are played. 404 for an
 unknown id. 422 outside the ranges.
 
 Response (all money KRW):
@@ -312,7 +312,7 @@ it. `POST /cafe/season` also returns `state_token`; the web client keeps only th
 - `POST /cafe/season/report` body `{state_token}`. Same report as `GET /cafe/season/{id}/report` with `season_id: null`.
 - Token = base64url(zlib(JSON `{v: 1, pv, b, d}`)) + "." + base64url(HMAC-SHA256 truncated to 16 bytes). `b` = the
   start body, `d` = the decision bodies sent, `pv` = hash of params.yaml + districts.yaml. About 300 characters at the
-  start and after 12 months. Not encrypted: it carries only the store setup and decisions.
+  start and after the last month. Not encrypted: it carries only the store setup and decisions.
 - Key: env `CAFE_TOKEN_KEY` (a dev default otherwise; set a real one on any deployment). A token that fails the
   signature, the shape or decoding is 400 `{error: "bad_state_token"}`; a token made before the model inputs changed is
   409 `{error: "model_changed"}` (start a new season).
@@ -486,7 +486,7 @@ dessert margin).
 | district 3110131 성수동카페거리 | `deposit_per_pyeong_krw` | 2890000 | 가정 | GAP (research §7-6); 대학로 평당 보증금 x 임대료 비율(215/198)로 환산한 가정 |
 | district 3110131 성수동카페거리 | `key_money_krw` | 39900000 | M | 한국부동산원 상업용부동산 임대동향 권리금 조사 2025, 서울 숙박·음식점업 중앙값 3,990만원 (R-ONE). 교차 확인: 농식품부·농경연 「2025 외식업체 경영실태 조사 통계보고서」 (2025.8~10 방문 면접, 2024년 실적, 커피 전문점 n=261) 표22 사업장 임차권리금, 커피 전문점 평균 3,828.6만원 (권리금을 낸 102곳); 두 공식 자료가 4% 안에서 맞음. 업종은 숙박·음식점 전체(R-ONE)이거나 지역이 전국(농경연)이라 M, 입지별 값 없음 |
 
-| season | `months` | 12 | 가정 | none; 한 시즌 = 12개월 |
+| season | `months` | 6 | 가정 | none; 한 시즌 = 6개월 (고깃집 시즌과 맞춤, 2026-10-20 결정). 건희 원안은 12개월 |
 | season | `start_month` | 3 | 가정 | none; 기본 오픈 달 3월 (대학가 개강), 요청에서 바꿀 수 있음 |
 | season | `seasonality_by_quarter` | 1: 0.92, 2: 1.02, 3: 1.07, 4: 1.0 | H | 서울 상권 커피-음료 분기 매출 2025 Q1 6,325억 Q2 7,046 Q3 7,347 Q4 6,864 ÷ 2025 평균 6,896억, research §1.3; 분기 지수를 그 분기의 세 달에 똑같이 적용, 분기 안의 달별 차이는 GAP |
 | season | `launch_share` | 0.7 | 가정 | none; 새 매장은 성숙 매장 손님의 70%에서 시작, 단골이 쌓이며 100%로 다가감 |
@@ -530,6 +530,7 @@ dessert margin).
 | season | `loan_term_months` | 60 | 가정 | none; 5년 원리금 균등, 거치 기간 없음 (보수적) |
 | season | `working_capital_months` | 3 | 가정 | none; 운전자금 기본값: 문을 열 때 통장에 월 고정비 3개월치가 있도록 모자란 만큼 빌림, extra_loan_krw로 바꿀 수 있음 |
 | season | `vat_refund_month` | 2 | L | 부가가치세법 조기환급 (사업 설비 신설 취득), research §3.2 부가세 선지급 후 환급; 환급이 들어오는 달은 가정 |
+| season | `scenario_points` | 2개 상황 | 가정 | none; 매달 두 가지 상황(주말 줄, 평일 낮)에서 대응을 고름. 효과 크기는 모두 가정 (한 달 1사건 방식으로 바뀔 예정) |
 | season | `closure_negative_months` | 2 | 가정 | none; 현금이 두 달 연속 마이너스면 폐업 |
 | season | `rival_nearby_share` | 0.1 | 가정 | none; 상권 연간 개업 수 (district_meta opens_per_year, H) 중 우리 가게 바로 옆에 생기는 비율, 월 확률 = 1 - exp(-개업 x 이 값 ÷ 12) |
 | season | `rival_demand_mult` | 0.92 | 가정 | none; 근처 경쟁 카페가 생기면 손님 8% 감소, 시즌 끝까지 |

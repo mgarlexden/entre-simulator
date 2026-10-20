@@ -2,7 +2,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { DEFAULT_LEVERS, DEFAULT_PROFILE, emptyStore, setAreaInput, setDongData, setGrowth, setGuData, setKrei, setRentData, setRentInput, type Gu, type Levers, type Profile, type Store } from "./model";
 import ProfileStep from "./Profile";
-import { setAreaData, setShopData, setTrdarData, useIndustry } from "./area";
+import { setAreaData, setFlowData, setShopData, setTrdarData, useIndustry } from "./area";
 import Analysis from "./Analysis";
 import Chat from "./Chat";
 import CafeBuild from "./CafeBuild";
@@ -47,11 +47,12 @@ export default function Mock() {
     const prof = get(cafe ? "cafe_dong_profile.json" : "dong_profile.json").catch(() => null);     // 없으면 동네 지도와 '~형 상권'을 숨긴다
     const geo = get("seoul_dong.json").catch(() => null);
     const trdar = get("dong_trdar.json").catch(() => null);                                     // 없으면 동 안 상권 추천을 숨긴다
+    const flow = get("dong_flow.json").catch(() => null);                                      // 없으면 '이 동네 지나가는 사람'을 숨기고 엔진은 기준 상권 모양을 쓴다
     const shops = get("dong_shops.json").catch(() => null);                                    // 없으면 동 경쟁 탭의 가게 목록을 숨긴다
     const cafeDong = cafe ? get("cafe_dong.json").catch(() => null) : Promise.resolve(null); // 카페 구성(v6)과 서울 비교
-    Promise.all([get("seoul_gu.json"), get("gu_stats.json"), rent, dong, krei, growth, prof, geo, shops, cafeDong, trdar]).then(([g, d, r, dn, k, gr, pf, ge, sh, cd, tr]) => {
+    Promise.all([get("seoul_gu.json"), get("gu_stats.json"), rent, dong, krei, growth, prof, geo, shops, cafeDong, trdar, flow]).then(([g, d, r, dn, k, gr, pf, ge, sh, cd, tr, fl]) => {
       useIndustry(ind); // 아래 set*보다 먼저: 구 통계가 업종 블록을 고른다
-      if (!alive) return; setGuData(d); setRentData(r); setDongData(dn); setKrei(k); setGrowth(gr); setAreaData(pf, ge?.dong ?? null); setShopData(sh, cd); setTrdarData(tr); setGus(g); setReady(true);
+      if (!alive) return; setGuData(d); setRentData(r); setDongData(dn); setKrei(k); setGrowth(gr); setAreaData(pf, ge?.dong ?? null); setShopData(sh, cd); setTrdarData(tr); setFlowData(fl); setGus(g); setReady(true);
     }).catch(() => alive && setReady(true));
     return () => { alive = false; };
   }, [ind]);
@@ -86,7 +87,6 @@ export default function Mock() {
           </button>
         )}
       </header>
-      <p className="m-mocknote">목업 화면입니다. 지역 매출과 점포 수는 서울시 공개 자료, 날씨는 기상청 공개 자료, 월세는 한국부동산원 상권 값을 구로 묶은 근사, 나머지 비용은 가정이에요. <a href="#/sources">출처 보기</a></p>
 
       {!ready && <p className="m-loading">자료를 불러오는 중이에요</p>}
       {ready && step === "profile" && <ProfileStep profile={profile} setProfile={setProfile} gus={gus} onDone={() => go("area")} />}

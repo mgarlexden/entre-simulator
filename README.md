@@ -69,7 +69,7 @@ uvicorn api.changeup:app --host 127.0.0.1 --port 8010
 ## 챗봇 서버 (출처 검색)
 
 ```
-python -m uvicorn api.cite_api:app --host 127.0.0.1 --port 8001
+python -m uvicorn api.cite_api:app --host 127.0.0.1 --port 8000
 python -m pipelines.build_changeup_facts      # 월세·동네·경영 지표 근거 문장 다시 만들기 (facts_changeup.json)
 python -m tests.ask_eval.run                  # 평가 질문 40개
 ```

@@ -5,7 +5,7 @@ import { useMemo, memo } from "react";
 import * as THREE from "three";
 import { Box, C } from "../store3d/Building";
 import { bladeSign, cardSign, fasciaSign, grate } from "../store3d/textures";
-import { Pendant, Storefront, WALL_H, Wall } from "./Scene3D";
+import { FrontFade, Pendant, Storefront, WALL_H, Wall } from "./Scene3D";
 import { CELL, GRADES, ITEM, kitchenSpot, type Grade, type Placed } from "./model";
 
 const WOOD = "#8a5a3c", DARK = "#2b2d30", LEAF = "#4d7a4a", PARTITION = "#e9e2d4";
@@ -387,6 +387,8 @@ function RoomImpl({ w, d, grade, pyeong, items = [] }: { w: number; d: number; g
         {d / 2 - (-d / 2 + ITEM.kitchen.d) > 2 && <Glow p={[-w / 2 + 0.04, 2.1, d / 2 - 1]} s={[0.06, 0.12, 0.22]} color="#fff3d6" glow="#ffc070" k={1.6} />}
       </Wall>
       <Wall p={[w / 2 + 0.06, WALL_H / 2, 0]} s={[0.12, WALL_H, d]} color={g.wall} outside={(c) => c.x > w / 2} />
+      {/* 줌인하면 손님 쪽 앞벽(유리 전면, 간판, 네온, 돌출 간판)이 흐려져 안쪽 배치가 보인다 */}
+      <FrontFade z={d / 2 + 0.04}>
       <Storefront x0={-w / 2} x1={w / 2} z={d / 2 + 0.04} door={door} mat={false} />
       {/* fascia sign over the storefront, neon line under it, blade sign at the left corner */}
       <Box p={[0, WALL_H + 0.27, d / 2 + 0.1]} s={[fw + 0.24, fw * (192 / 1024) + 0.1, 0.12]} color="#4a2a20" />
@@ -401,6 +403,7 @@ function RoomImpl({ w, d, grade, pyeong, items = [] }: { w: number; d: number; g
         <Board map={blade} p={[-0.055, 0, 0]} size={[0.6, 1.2]} rot={[0, -Math.PI / 2, 0]} glow={0.3} />
         <Box p={[0, 0.1, -0.42]} s={[0.05, 0.05, 0.16]} color="#5b5248" />
       </group>
+      </FrontFade>
       {/* warm pendants by the door and over the pass */}
       <Pendant x={door.x - 1.1} z={d / 2 - 0.6} y={1.95} color="#7d1f16" />
       {items.some((i) => i.id === "kitchen") && [-w / 2 + 1.2, -w / 2 + 2.8].map((x) => <Pendant key={x} x={x} z={-d / 2 + ITEM.kitchen.d + 0.35} y={2.0} color="#7d1f16" />)}

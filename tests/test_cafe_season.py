@@ -10,6 +10,8 @@ from api import cafe as cafe_api
 from sim.cafe import season as S
 from sim.cafe.params import GRADES, load_params, v
 
+N = v("season", "months")   # 한 시즌의 달 수 (research/cafe/params.yaml season.months)
+
 ROOT = Path(__file__).resolve().parents[1]
 STORE = dict(district="3120012", size_pyeong=20, tables=7, chairs=22, bar_seats=8, espresso_groups=2,
              showcase=1, oven=1, kiosks=1, pos=1, own_capital_krw=300_000_000)
@@ -115,7 +117,7 @@ def test_closure_after_two_negative_months_only():
     # one negative month (before the VAT refund lands) is survivable
     run, months = run_season(own_capital_krw=80_000_000, extra_loan_krw=0, daily_customers=80, seed=0)
     assert months[0]["kpi"]["cash_krw"] < 0 and months[1]["kpi"]["cash_krw"] >= 0
-    assert not run["state"]["closed"] and len(months) == 12 and S.report(run)["survived"]
+    assert not run["state"]["closed"] and len(months) == N and S.report(run)["survived"]
 
 
 # ---------------------------------------------------------------------------------------------- decisions
@@ -178,7 +180,7 @@ def test_decisions_persist_and_price_change_is_one_time():
     assert all(m["decisions"]["price_level"] == pytest.approx(1.1) for m in months)
     assert all(m["decisions"]["hours"] == "long" and m["decisions"]["dessert"] is False for m in months)
     lo, hi = v("season", "price_level_range")
-    run, months = run_season({i: {"price_change_pct": 30} for i in range(12)}, daily_customers=200)
+    run, months = run_season({i: {"price_change_pct": 30} for i in range(N)}, daily_customers=200)
     assert months[-1]["decisions"]["price_level"] == pytest.approx(hi)
 
 
@@ -237,7 +239,7 @@ def test_waterfall_sums_and_report_drivers_sum():
     assert sum(d["krw"] for d in rep["drivers"]) == rep["cumulative_op_krw"] - rep["baseline_cumulative_op_krw"]
     assert rep["best_month"]["op_krw"] == max(m["kpi"]["op_krw"] for m in months)
     assert rep["worst_month"]["op_krw"] == min(m["kpi"]["op_krw"] for m in months)
-    assert rep["survived"] and rep["months_played"] == 12 and rep["status"] == "finished"
+    assert rep["survived"] and rep["months_played"] == N and rep["status"] == "finished"
     assert months[-1]["status"] == "finished" and rep["summary_ko"]
 
 
@@ -253,9 +255,11 @@ def test_rating_and_regulars_drift():
 
 def test_seasonality_follows_quarter_index():
     q = v("season", "seasonality_by_quarter")
-    _, months = run_season(daily_customers=100, start_month=1)
-    assert [m["calendar_month"] for m in months] == list(range(1, 13))
-    assert [m["drivers"]["season_index"] for m in months] == [q[(c - 1) // 3 + 1] for c in range(1, 13)]
+    for start in (1, 7):   # 한 시즌이 6개월이라 상반기·하반기를 따로 본다
+        _, months = run_season(daily_customers=100, start_month=start)
+        cal = [(start - 1 + i) % 12 + 1 for i in range(N)]
+        assert [m["calendar_month"] for m in months] == cal
+        assert [m["drivers"]["season_index"] for m in months] == [q[(c - 1) // 3 + 1] for c in cal]
     assert load_params()["season"]["seasonality_by_quarter"]["grade"] == "H"
 
 
@@ -321,13 +325,13 @@ def test_api_round_trip(client):
     assert again.json() == m1.json()                                       # a retry returns the played month
     assert client.post(f"/cafe/season/{sid}/month", json={"price_change_pct": 9, "month_index": 0}).status_code == 409
     assert client.post(f"/cafe/season/{sid}/month", json={"month_index": 5}).status_code == 409
-    for i in range(1, 12):
+    for i in range(1, N):
         r = client.post(f"/cafe/season/{sid}/month", json={"month_index": i} if i % 2 else {})
         assert r.status_code == 200 and r.json()["month"] == i + 1
     over = client.post(f"/cafe/season/{sid}/month", json={})
     assert over.status_code == 409 and over.json()["detail"]["error"] == "season_over"
     rep = client.get(f"/cafe/season/{sid}/report").json()
-    assert rep["months_played"] == 12 and rep["status"] == "finished" and len(rep["months"]) == 12
+    assert rep["months_played"] == N and rep["status"] == "finished" and len(rep["months"]) == N
     assert "_vs_baseline" not in json.dumps(m1.json())
     # same seed and decisions through the API = same months as the library
     _, lib = run_season({0: {"price_change_pct": 5}}, seed=5, own_capital_krw=100_000_000, daily_customers=200)
@@ -362,7 +366,7 @@ PLAN = {0: {"price_change_pct": 5}, 3: {"hours": "long"}, 6: {"marketing_krw": 5
 def _token_season(client, prefix="/cafe"):
     st = client.post(f"{prefix}/season", json=SEASON_BODY).json()
     tok, months = st["state_token"], []
-    for i in range(12):
+    for i in range(N):
         r = client.post(f"{prefix}/season/month", json={"state_token": tok, **PLAN.get(i, {})})
         assert r.status_code == 200, r.text
         months.append(r.json())
@@ -375,7 +379,7 @@ def test_token_round_trip_equals_stateful_and_library(client):
     assert len(st["state_token"]) < 600 and len(tok) < 800             # compact: start body + 12 small decision dicts
     sid = client.post("/cafe/season", json=SEASON_BODY).json()["season_id"]
     stateful = []
-    for i in range(12):
+    for i in range(N):
         m = client.post(f"/cafe/season/{sid}/month", json=PLAN.get(i, {})).json()
         m.pop("state_token")
         stateful.append(m)
@@ -436,7 +440,7 @@ def test_token_from_older_model_is_409(client, monkeypatch):
 def test_replay_cost_is_small():
     import time
     t0 = time.perf_counter()
-    S.replay({**STORE, "daily_customers": 250, "seed": 1}, [PLAN.get(i, {}) for i in range(12)])
+    S.replay({**STORE, "daily_customers": 250, "seed": 1}, [PLAN.get(i, {}) for i in range(N)])
     assert time.perf_counter() - t0 < 2.0                                # measured ~0.07 s on an M-series Mac
 
 
@@ -453,7 +457,7 @@ def test_web_app_serves_cafe_under_api_only():
     assert c.get("/api/health").json()["ok"] is True
     _, tok, months = _token_season(c, prefix="/api/cafe")
     assert months[-1]["status"] == "finished"
-    assert c.post("/api/cafe/season/report", json={"state_token": tok}).json()["months_played"] == 12
+    assert c.post("/api/cafe/season/report", json={"state_token": tok}).json()["months_played"] == N
 
 
 # ---------------------------------------------------------------------------------------------- Korean text
