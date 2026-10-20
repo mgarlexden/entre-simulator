@@ -1,6 +1,7 @@
 // #/sources 의 카페 탭. 건희 레포(sdic-persona-team1)의 카페 브랜치가 쓰는 데이터, 그 데이터의 갭,
 // 팀원 파일 두 개가 채운 것과 남은 것을 한 곳에 모은다. 갭 목록은 pipelines/build_sources_cafe.py 가 만든
 // web/public/mock/sources_cafe.json 에서 읽는다 (값은 원 파일 그대로, 반영 여부만 건희 params.yaml 과 비교한 결과).
+import SourcesSummary from "./SourcesSummary";
 import { useEffect, useState } from "react";
 import Fold from "./Fold";
 
@@ -125,6 +126,7 @@ export default function SourcesCafe() {
 
   return (
     <>
+      <SourcesSummary industry="cafe" />
       <p>카페는 <b>건희 레포의 카페 브랜치</b>가 만든 값이 기준입니다. 이 서비스의 카페 화면은 아직 만들지 않았고(고깃집 설계가 끝난 뒤 시작),
         여기서는 데이터가 어디서 왔고 무엇이 비어 있는지만 정리합니다. 값과 출처는 건희 파일에 적힌 그대로이며 원 출처를 직접 열어 확인하지는 않았습니다.</p>
 
@@ -241,7 +243,7 @@ export default function SourcesCafe() {
           <tr><td>드는 돈</td><td><b className="k k-실측">충분</b></td><td>독립 카페 기준 개업 투자비 6,000만원(3,000~9,000: 인테리어 3,000, 주방 1,500, 홀 1,000), 인테리어 평당 150만원, 보증금 3,000만원, 권리금 2,500만원, 총 창업비용 1억 1,000만원(6,500~15,000)이 H. 상권별 보증금만 서울 값으로 대신함</td></tr>
           <tr><td>모자란 돈 (대출)</td><td><b className="k k-가정">대체로 충분</b></td><td>정책자금 한도 7,000만원·5년(거치 2년)·기준금리+0.6%p가 있음 (업계 글 M, 공고 원문 확인 필요)</td></tr>
           <tr><td>열기 전 점검</td><td><b className="k k-실측">충분</b></td><td>독립 카페 비용 구조(식재료 40%, 고용인 인건비 11%, 임차료 10%, 영업이익률 10%)와 객단가 5,000원, 영업일 26일이 H. 경쟁 개점 영향과 월세 인상 확률만 가정</td></tr>
-          <tr><td>시뮬레이션 (12개월)</td><td><b className="k k-예시값">비교용</b></td><td>수요 기준선과 채널 비중은 채워졌으나 단골, 별점, 이탈, 마케팅, 사건 확률은 여전히 가정 (시즌 변수 57개 중 51개)</td></tr>
+          <tr><td>시뮬레이션 (6개월, 원안 12개월)</td><td><b className="k k-예시값">비교용</b></td><td>수요 기준선과 채널 비중은 채워졌으나 단골, 별점, 이탈, 마케팅, 사건 확률은 여전히 가정 (시즌 변수 57개 중 51개)</td></tr>
         </tbody>
       </table>
 

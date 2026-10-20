@@ -203,7 +203,7 @@ def test_api_round_trip():
     app.include_router(cafe_api.router)
     c = TestClient(app)
     ds = c.get("/cafe/districts").json()
-    assert {d["code"] for d in ds} == set(DISTRICTS) and all(d["context_ko"] for d in ds)
+    assert {d["code"] for d in ds} >= set(DISTRICTS) and all(d["context_ko"] for d in ds)   # 서울 행정동(build_dongs.py)이 더해져 있어 3곳은 일부
     r = c.post("/cafe/preview", json=SAMPLE)
     assert r.status_code == 200
     assert r.json() == json.loads(json.dumps(preview(SAMPLE)))

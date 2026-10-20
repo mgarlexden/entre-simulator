@@ -4,9 +4,10 @@
 
 import SourcesCash from "./SourcesCash";
 import Fold from "./Fold";
+import SourcesSummary from "./SourcesSummary";
 
-type Via = "API 연동" | "파일 내려받기" | "건희 레포 파일" | "팀원 파일" | "직접 입력" | "우리가 정함" | "수빈 파일";
-const VIA_CLASS: Record<Via, string> = { "API 연동": "실측", "파일 내려받기": "실측", "건희 레포 파일": "차용", "팀원 파일": "차용", "수빈 파일": "차용", "직접 입력": "가정", "우리가 정함": "가정" };
+type Via = "API 연동" | "파일 내려받기" | "공유 연구 레포" | "공유 자료" | "직접 입력" | "우리가 정함";
+const VIA_CLASS: Record<Via, string> = { "API 연동": "실측", "파일 내려받기": "실측", "공유 연구 레포": "차용", "공유 자료": "차용", "직접 입력": "가정", "우리가 정함": "가정" };
 const Tag = ({ v }: { v: Via }) => <b className={`k k-${VIA_CLASS[v]}`}>{v}</b>;
 
 type Src = { name: string; via: Via; how: string; file: string; tabs: string; status: string; url?: string };
@@ -19,19 +20,19 @@ const ALL: Src[] = [
   { name: "KOSIS 외식업체경영실태조사·한식산업실태조사 (농경연, orgId 114, 표 18개)", via: "API 연동", how: "KOSIS_KEY. 한식·서울권 비용 구성, 영업이익률, 개업 투자비, 객단가. 육류요리 전문점 단독 손익 행은 없음", file: "pipelines/fetch_kosis.py → kosis_food.json", tabs: "열기 전 점검(식재료비 39.3% 비교선), 챗봇(비용 구성)", status: "수집됨 (계산 미적용, 비교선과 챗봇에만 사용)", url: "https://kosis.kr/" },
   { name: "기상청 지상(ASOS) 일자료 · 한국천문연구원 특일 정보", via: "API 연동", how: "DATA_GO_KR_KEY. 서울(108) 2016~2025년 일자료를 달별 비율로 집계, 공휴일 46일", file: "pipelines/fetch_weather.py → weather_seoul.json, holidays.json", tabs: "시뮬레이션(비 오는 날, 공휴일), 열기 전 점검(날씨 충격)", status: "연결됨" },
   { name: "기상청 ASOS 시간자료 · 제주 돼지도체 경락가격", via: "API 연동", how: "ASOS_HOURLY_KEY, LIVESTOCK_AUCTION_KEY. 받아 두기만 함", file: "fetch_asos_hourly.py → asos_hourly.json, fetch_jeju_pork.py → jeju_pork.json", tabs: "없음 (계산에 쓰지 않음)", status: "수집됨 (미적용)" },
-  { name: "대학로 가상 매장 입력값 research/hero_base.yaml (손님 1인 금액, 재료비 31%, 인건비, 관리비, 카드 수수료, 사장 생활비 등 97개 변수)", via: "건희 레포 파일", how: "sdic-persona-team1의 복사본. 낮음/기본/높음과 확신도(H 10, M 10, L 62)가 붙어 있음. 원 레포가 '검토 전 예시'라고 밝힘", file: "research/hero_base.yaml (+ 화면에는 model.ts 상수로 옮김)", tabs: "열기 전 점검, 시뮬레이션(엔진 내부)", status: "차용" },
-  { name: "시즌 파라미터·사건·달력·충격: season_params.yaml (105개), events.yaml (사건 18종, 밤 결정 5종), calendar.yaml (10~3월), shocks.yaml", via: "건희 레포 파일", how: "복사본 그대로. 105개 중 근거 번호가 붙은 것은 13개이고 83개는 '가정' 태그", file: "research/*.yaml", tabs: "시뮬레이션", status: "차용 (그대로)" },
-  { name: "시뮬 엔진 sim/ (simpy DES + numpy 시즌 엔진, 손님 도착·좌석·직원·만족도·단골·사건)", via: "건희 레포 파일", how: "복사본. 우리가 바꾼 것: 시작 달 선택과 4~9월 달력 확장(season.py), 신규 오픈 시작 상태(start_new), 점포 덮어쓰기(store_input.py), FastAPI 서버(api/changeup.py)", file: "sim/*.py, api/changeup.py", tabs: "시뮬레이션", status: "차용 + 확장" },
-  { name: "근거 목록 ontology/sources.csv (S번호 76건)", via: "건희 레포 파일", how: "차용값의 원 출처를 S번호로 추적할 때 씀", file: "ontology/sources.csv", tabs: "출처 장부", status: "참조" },
-  { name: "서울시 상가임대차 실태조사 2023 (3개 상권 + 서울 평균)", via: "팀원 파일", how: "카페 리서치 팀원이 보고서 수치를 옮겨 적은 '약한 근거 보완_1014.xlsx > 상권 비교'. 업종 구분 없는 1층 상가", file: "약한 근거 보완_1014.xlsx", tabs: "동네 분석(보증금 12개월분 결정의 근거)", status: "부분 확인 (원 보고서 미확인)" },
-  { name: "외식업체 경영실태조사 2025 통계보고서 PDF + F&B 원자료 엑셀: 한식 육류 요리 전문점(275곳) 행. 면적·보증금·월세·권리금·투자비(인테리어·주방·홀)·좌석·영업일·객단가·손님 유입·매출·비용·영업이익, 평당 인테리어·월세 분위수", via: "팀원 파일", how: "카페 리서치 팀원이 Drive에 올림(통계보고서 PDF는 2차 업로드). PDF 표의 육류 행을 pipelines/build_gogi_krei.py가 그대로 읽고, 엑셀 원자료는 가중치로 분위수를 계산. 전국 값이며 서울만 뽑은 표는 없음", file: "외식업체_경영실태_통계보고서_2025.pdf, FB_데이터_로우데이터포함.xlsx → gogi_krei.json (저장소 밖 원본)", tabs: "내 조건(투자 중앙값), 동네 분석(매출 배율, 권리금, 제안), 가게 꾸미기(인테리어·주방·테이블 단가)", status: "연결됨" },
+  { name: "대학로 가상 매장 입력값 research/hero_base.yaml (손님 1인 금액, 재료비 31%, 인건비, 관리비, 카드 수수료, 사장 생활비 등 97개 변수)", via: "공유 연구 레포", how: "sdic-persona-team1의 복사본. 낮음/기본/높음과 확신도(H 10, M 10, L 62)가 붙어 있음. 원 레포가 '검토 전 예시'라고 밝힘", file: "research/hero_base.yaml (+ 화면에는 model.ts 상수로 옮김)", tabs: "열기 전 점검, 시뮬레이션(엔진 내부)", status: "차용" },
+  { name: "시즌 파라미터·사건·달력·충격: season_params.yaml (105개), events.yaml (사건 18종, 밤 결정 5종), calendar.yaml (10~3월), shocks.yaml", via: "공유 연구 레포", how: "복사본 그대로. 105개 중 근거 번호가 붙은 것은 13개이고 83개는 '가정' 태그", file: "research/*.yaml", tabs: "시뮬레이션", status: "차용 (그대로)" },
+  { name: "시뮬 엔진 sim/ (simpy DES + numpy 시즌 엔진, 손님 도착·좌석·직원·만족도·단골·사건)", via: "공유 연구 레포", how: "복사본. 우리가 바꾼 것: 시작 달 선택과 4~9월 달력 확장(season.py), 신규 오픈 시작 상태(start_new), 점포 덮어쓰기(store_input.py), FastAPI 서버(api/changeup.py)", file: "sim/*.py, api/changeup.py", tabs: "시뮬레이션", status: "차용 + 확장" },
+  { name: "근거 목록 ontology/sources.csv (S번호 76건)", via: "공유 연구 레포", how: "차용값의 원 출처를 S번호로 추적할 때 씀", file: "ontology/sources.csv", tabs: "출처 장부", status: "참조" },
+  { name: "서울시 상가임대차 실태조사 2023 (3개 상권 + 서울 평균)", via: "공유 자료", how: "보고서 수치를 표로 옮겨 적은 공유 자료의 '상권 비교' 시트. 업종 구분 없는 1층 상가", file: "공유 자료 (엑셀)", tabs: "동네 분석(보증금 12개월분 결정의 근거)", status: "부분 확인 (원 보고서 미확인)" },
+  { name: "외식업체 경영실태조사 2025 통계보고서 PDF + F&B 원자료 엑셀: 한식 육류 요리 전문점(275곳) 행. 면적·보증금·월세·권리금·투자비(인테리어·주방·홀)·좌석·영업일·객단가·손님 유입·매출·비용·영업이익, 평당 인테리어·월세 분위수", via: "공유 자료", how: "공유 드라이브에 올라온 자료(통계보고서 PDF는 2차 업로드). PDF 표의 육류 행을 pipelines/build_gogi_krei.py가 그대로 읽고, 엑셀 원자료는 가중치로 분위수를 계산. 전국 값이며 서울만 뽑은 표는 없음", file: "통계보고서 PDF, F&B 원자료 엑셀 → gogi_krei.json (저장소 밖 원본)", tabs: "내 조건(투자 중앙값), 동네 분석(매출 배율, 권리금, 제안), 가게 꾸미기(인테리어·주방·테이블 단가)", status: "연결됨" },
   { name: "서울시 상권분석서비스 2024년 추정매출·점포 파일 (성장률 계산용)", via: "파일 내려받기", how: "2025년과 같은 상권끼리 비교한 구별 매출 성장률과 개업·폐업률 변화. 행정동은 추정매출-행정동 API로 2024·2025 한식 매출 합을 비교", file: "pipelines/build_growth.py → growth.json, pipelines/build_dong_profile.py → dong_profile.json", tabs: "동네 분석(성장 지도·성장 행·제안)", status: "연결됨" },
   { name: "서울 행정동 경계 (vuski/admdongkor HangJeongDong 2023-07)", via: "파일 내려받기", how: "GitHub 원본. 구 지도와 좌표를 외곽 상자로 맞춰 0.25km 어긋날 수 있음. 상일제1·2동은 상권분석 기준에 맞춰 상일동으로 합침", file: "pipelines/build_seoul_dong.py → seoul_dong.json", tabs: "동네 분석(동네 지도)", status: "연결됨" },
-  { name: "동네 면적·상주/직장인구·유동인구·아파트 평균 시가·지하철역·대학교 (카페 팀 v6 엑셀 2단계_서울 행정동 raw)", via: "팀원 파일", how: "카페용으로 모은 행정동 지표지만 업종과 무관해 고깃집 동네 분석에도 씀. 경쟁 밀도(곳/㎢), 1곳당 인구, 부촌 판단에 사용", file: "카페_시뮬레이터_입점_변수자료_v6.xlsx → cafe_dong.json → dong_profile.json", tabs: "동네 분석(경쟁 강도, 비용, '~형 상권')", status: "연결됨" },
-  { name: "예비창업 정책자금 정리표 (중진공·소진공·신보·서울신보·미소금융, 출처 S1~S31)", via: "팀원 파일", how: "업계 글과 기관 안내를 모은 표. 한도·금리는 자료마다 다르게 적힌 채로 옮김. 공고 원문 확인 전", file: "예비창업 정책자금_1015.xlsx → web/src/mock/funds.ts", tabs: "동네 분석(모자란 돈)", status: "연결됨 (원문 확인 필요)" },
-  { name: "Drive 자료 원문 폴더: 2023 서울시 상가임대차 실태조사 최종보고서(PDF, 이미지라 글자 추출 안 됨), 외식산업 경영형태 및 식재료 구매현황 심층분석(2019 조사), 산재보험료율, 바리스타 평가표, 오픈서베이 카페 트렌드", via: "팀원 파일", how: "2023 임대차 보고서는 읽지 못했고, 심층분석은 2019 조사라 2025 보고서와 같은 표를 쓰는 데 쓰지 않음. 나머지는 카페용", file: "Drive 카페_자료 모음/자료 원문", tabs: "없음", status: "검토만 (미사용)" },
-  { name: "고깃집 유튜브 사장님 인터뷰 정성 기준 (21건 + 알바 경험자 3곳), 인터뷰 요약 20건", via: "팀원 파일", how: "고깃집 리서치 팀원이 자막을 읽고 코딩. 자기보고 자료, 팀원 검토 전 초안", file: "고깃집_정성기준.xlsx, 고깃집_사장님인터뷰.pdf", tabs: "없음 (변수 값에 쓰지 않음)", status: "참고용 (결정 보류)" },
-  { name: "챗봇 근거 문장 230개: 돼지고기 소비자가격·부위별·도매·경락(KAPE 통계DB), 한국육류유통수출협회 월간 육류유통 2026년 10월호(KMTA), 생활물가지수(KOSIS), 돼지 사육 현황, 한식·카페 점포, 날씨·공휴일", via: "수빈 파일", how: "수빈 님 파이프라인이 받아 둔 JSON을 근거 문장으로 만든 것. KAPE·KMTA 값은 화면 조회·잡지 본문을 옮겨 적은 파일", file: "pipelines/build_facts.py, fetch_kosis_pork.py, fetch_asos_hourly.py → facts.json (+ kape_2026.json, kmta_2026_10.json, kosis_pork.json, pig_2026.json, pig_auction_2026.json, pork_kape_2026.json)", tabs: "챗봇", status: "연결됨 (PR #1 병합)" },
+  { name: "동네 면적·상주/직장인구·유동인구·아파트 평균 시가·지하철역·대학교 (서울 행정동 지표 모음 엑셀, 외식업체 경영실태조사 2025 원자료 가공)", via: "공유 자료", how: "카페용으로 모은 행정동 지표지만 업종과 무관해 고깃집 동네 분석에도 씀. 경쟁 밀도(곳/㎢), 1곳당 인구, 부촌 판단에 사용", file: "공유 엑셀 → cafe_dong.json → dong_profile.json", tabs: "동네 분석(경쟁 강도, 비용, '~형 상권')", status: "연결됨" },
+  { name: "예비창업 정책자금 정리표 (중진공·소진공·신보·서울신보·미소금융, 출처 S1~S31)", via: "공유 자료", how: "업계 글과 기관 안내를 모은 표. 한도·금리는 자료마다 다르게 적힌 채로 옮김. 공고 원문 확인 전", file: "정책자금 정리 엑셀 → web/src/mock/funds.ts", tabs: "동네 분석(모자란 돈)", status: "연결됨 (원문 확인 필요)" },
+  { name: "Drive 자료 원문 폴더: 2023 서울시 상가임대차 실태조사 최종보고서(PDF, 이미지라 글자 추출 안 됨), 외식산업 경영형태 및 식재료 구매현황 심층분석(2019 조사), 산재보험료율, 바리스타 평가표, 오픈서베이 카페 트렌드", via: "공유 자료", how: "2023 임대차 보고서는 읽지 못했고, 심층분석은 2019 조사라 2025 보고서와 같은 표를 쓰는 데 쓰지 않음. 나머지는 카페용", file: "Drive 카페_자료 모음/자료 원문", tabs: "없음", status: "검토만 (미사용)" },
+  { name: "고깃집 유튜브 사장님 인터뷰 정성 기준 (21건 + 알바 경험자 3곳), 인터뷰 요약 20건", via: "공유 자료", how: "유튜브 자막을 읽고 기준으로 코딩한 자료. 자기보고 자료이고 검토 전 초안", file: "정성 기준 엑셀, 인터뷰 요약 PDF", tabs: "없음 (변수 값에 쓰지 않음)", status: "참고용 (결정 보류)" },
+  { name: "챗봇 근거 문장 230개: 돼지고기 소비자가격·부위별·도매·경락(KAPE 통계DB), 한국육류유통수출협회 월간 육류유통 2026년 10월호(KMTA), 생활물가지수(KOSIS), 돼지 사육 현황, 한식·카페 점포, 날씨·공휴일", via: "공유 자료", how: "공공 API에서 받아 둔 JSON을 근거 문장으로 만든 것. KAPE·KMTA 값은 화면 조회·잡지 본문을 옮겨 적은 파일", file: "pipelines/build_facts.py, fetch_kosis_pork.py, fetch_asos_hourly.py → facts.json (+ kape_2026.json, kmta_2026_10.json, kosis_pork.json, pig_2026.json, pig_auction_2026.json, pork_kape_2026.json)", tabs: "챗봇", status: "연결됨 (PR #1 병합)" },
   { name: "월세·행정동·외식업 비용 구성 근거 문장", via: "우리가 정함", how: "위 R-ONE, 행정동, KOSIS 값을 문장으로 옮긴 것. 숫자는 파일 값 그대로", file: "pipelines/build_changeup_facts.py → facts_changeup.json", tabs: "챗봇", status: "연결됨" },
   { name: "사용자 입력 (구, 동네, 평수, 테이블, 직원, 자본금, 대출, 월세 직접 입력)", via: "직접 입력", how: "화면에서 입력받아 계산과 챗봇 질문에 같이 보냄", file: "Profile.tsx, Analysis.tsx, Builder.tsx, chatContext.ts", tabs: "전부", status: "—" },
   { name: "드는 돈과 점검의 단가·기준선 (인테리어 평당, 물건 가격, 간판, 첫 재료, 대출 이자, 오픈 곡선, 점검 기준선 등)", via: "우리가 정함", how: "근거 자료 없이 정한 값. 바꿔도 되는 설정값", file: "web/src/mock/model.ts", tabs: "동네 분석, 가게 꾸미기, 열기 전 점검", status: "가정" },
@@ -46,7 +47,7 @@ const TABS: { title: string; note: string; rows: TabRow[] }[] = [
       { item: "구별 고깃집(돼지고기 구이/찜) 수", source: "소상공인 상가(상권)정보 15083033", via: "파일 내려받기", file: "gu_stats.json pork" },
       { item: "동네(행정동) 유형, 점포당 매출의 구 안 상대 위치, 고깃집 수", source: "추정매출-행정동 + 상가업소 API", via: "API 연동", file: "dong_stats.json" },
       { item: "평당 월세, 월세 범위(낮음~높음), 구 월세 순위", source: "한국부동산원 R-ONE", via: "API 연동", file: "rent_gu.json" },
-      { item: "보증금 = 월세 12개월분", source: "서울시 상가임대차 실태조사 팀 자료의 11~15개월", via: "팀원 파일", file: "약한 근거 보완_1014 > 상권 비교 → model.ts DEPOSIT_MONTHS" },
+      { item: "보증금 = 월세 12개월분", source: "서울시 상가임대차 실태조사 팀 자료의 11~15개월", via: "공유 자료", file: "약한 근거 보완_1014 > 상권 비교 → model.ts DEPOSIT_MONTHS" },
       { item: "인테리어 평당(150/220/320만), 물건 가격표, 간판 250만, 첫 재료 300만, 석 달 버틸 돈", source: "근거 없음", via: "우리가 정함", file: "model.ts GRADES, CATALOG, SIGN, FIRST_STOCK, Analysis.tsx MONTHLY_BURN" },
       { item: "정책자금 3종, 대출 이자 연 6%", source: "근거 없음 (종류 이름만 적은 틀)", via: "우리가 정함", file: "Analysis.tsx LOANS, model.ts LOAN_RATE" },
       { item: "구 지도 모양", source: "southkorea/seoul-maps (2013)", via: "파일 내려받기", file: "seoul_gu.json" },
@@ -63,18 +64,18 @@ const TABS: { title: string; note: string; rows: TabRow[] }[] = [
   {
     title: "열기 전 점검", note: "본전 손님 수와 나쁜 경우를 계산하는 화면. 비용 구조 대부분이 건희 레포의 대학로 가상 매장 값입니다.",
     rows: [
-      { item: "손님 1인 금액 27,000원, 재료비 31%, 직원 1명 199만원, 관리비 평당 12.8만원, 카드 수수료 0.84%, 사장 생활비 300만원", source: "대학로 가상 매장 hero_base.yaml (S92 등)", via: "건희 레포 파일", file: "model.ts 상수 ← hero.json pnl" },
+      { item: "손님 1인 금액 27,000원, 재료비 31%, 직원 1명 199만원, 관리비 평당 12.8만원, 카드 수수료 0.84%, 사장 생활비 300만원", source: "대학로 가상 매장 hero_base.yaml (S92 등)", via: "공유 연구 레포", file: "model.ts 상수 ← hero.json pnl" },
       { item: "월세", source: "R-ONE", via: "API 연동", file: "rent_gu.json" },
       { item: "식재료비 비교선 39.3% (서울권 음식점 평균, 술·음료 포함)", source: "KOSIS 외식업체경영실태조사 2025", via: "API 연동", file: "kosis_food.json" },
       { item: "비가 잦은 달, 공휴일 충격", source: "기상청 ASOS 일자료, 특일 정보", via: "API 연동", file: "weather_seoul.json, holidays.json" },
-      { item: "비 오는 날 손님 −10%, 근처 고깃집 개점 −9% 등 충격 크기", source: "research/shocks.yaml SH10, events.yaml (원 레포도 가정 표시)", via: "건희 레포 파일", file: "model.ts SHOCKS" },
+      { item: "비 오는 날 손님 −10%, 근처 고깃집 개점 −9% 등 충격 크기", source: "research/shocks.yaml SH10, events.yaml (원 레포도 가정 표시)", via: "공유 연구 레포", file: "model.ts SHOCKS" },
       { item: "여유·주의·취약 판단선, 좌석 14석당 직원 1명", source: "검증한 적 없는 기준선", via: "우리가 정함", file: "model.ts checks" },
     ],
   },
   {
     title: "챗봇 (궁금한 것 물어보기)", note: "LLM 없이 근거 문장을 검색해 그대로 보여 줍니다. 화면의 입력과 시뮬 결과를 같이 보내 즉석 문장을 만듭니다.",
     rows: [
-      { item: "돼지고기 가격, 월별 시세, 경락가, 돼지 사육, 한식 점포, 날씨 근거 문장 230개 (카페 점포 문장 26개 포함)", source: "수빈 님 pipelines/build_facts.py (KAPE, KMTA, KOSIS, 서울시, 기상청)", via: "수빈 파일", file: "facts.json" },
+      { item: "돼지고기 가격, 월별 시세, 경락가, 돼지 사육, 한식 점포, 날씨 근거 문장 230개 (카페 점포 문장 26개 포함)", source: "수빈 님 pipelines/build_facts.py (KAPE, KMTA, KOSIS, 서울시, 기상청)", via: "공유 자료", file: "facts.json" },
       { item: "구·동네 월세, 행정동 유형, 외식업 비용 구성 근거 문장", source: "R-ONE, 행정동 통계, KOSIS", via: "우리가 정함", file: "facts_changeup.json" },
       { item: "내 가게 값 (평수, 월세, 여는 돈, 모자란 돈, 달별 결과, 본전 시점)", source: "질문과 함께 화면이 보낸 값 (ctx)", via: "직접 입력", file: "Chat.tsx → api/ask_ext.py" },
     ],
@@ -92,9 +93,9 @@ const VAR_GROUPS: VarGroup[] = [
       { name: "야장(테라스)", value: "없음으로 고정", where: "sto_terrace = 0, 계획 terrace = False", via: "우리가 정함", file: "store_input.py", note: "야장을 꾸미는 화면이 없어서. 소나기 결정은 야장이 있을 때만 나옴" },
       { name: "직원", value: "교대당 알바 0~4명, 정규직 0명", where: "sto_parttimers, sto_employees = 0", via: "우리가 정함", file: "store_input.py", note: "엔진의 정규직은 서빙에 세지 않아 전부 교대 알바로 봄. 인건비 단가는 기준 점포 값(시급 × 시간)" },
       { name: "월세 (현금)", value: "구 R-ONE 평당 현금 월세 × 평수, 또는 내가 입력한 평당 월세", where: "drv_rent", via: "API 연동", file: "rent_gu.json" },
-      { name: "공과금", value: "170만원 × 평수 ÷ 25", where: "cst_utilities", via: "건희 레포 파일", file: "hero_base.yaml cst_utilities 170만 (S92) 비례" },
+      { name: "공과금", value: "170만원 × 평수 ÷ 25", where: "cst_utilities", via: "공유 연구 레포", file: "hero_base.yaml cst_utilities 170만 (S92) 비례" },
       { name: "손님 규모", value: "동네(없으면 구) 한식 점포당 월매출 ÷ 2,578만원, 0.4~2.0배로 제한", where: "arrival_scale", via: "API 연동", file: "dong_stats.json, gu_stats.json", note: "2,578만원은 건희 레포 기준 상권 앵커. 고깃집 매출이 아니라 한식 전체이고, 새 가게가 평균 점포만큼 손님을 받는다는 가정이 들어감" },
-      { name: "달력 수요 지수", value: "대학·청년 동네: 10~3월은 엔진 달력 그대로, 4~9월은 동네 분기 지수. 그 밖의 동네: 전부 분기 지수", where: "calendar.demand_index", via: "건희 레포 파일", file: "calendar.yaml + 우리 확장 (season.py _calendar)", note: "분기 안의 달은 같은 값(월 분할 자료 없음, 가정)" },
+      { name: "달력 수요 지수", value: "대학·청년 동네: 10~3월은 엔진 달력 그대로, 4~9월은 동네 분기 지수. 그 밖의 동네: 전부 분기 지수", where: "calendar.demand_index", via: "공유 연구 레포", file: "calendar.yaml + 우리 확장 (season.py _calendar)", note: "분기 안의 달은 같은 값(월 분할 자료 없음, 가정)" },
       { name: "대학가 행사 (축제 주간, 시험 주간)", value: "대학·청년 동네에만 나옴", where: "excluded_events", via: "우리가 정함", file: "store_input.py CAMPUS_ONLY_EVENTS" },
       { name: "시작 달", value: "1~12월 중 선택, 6개월", where: "store.months", via: "직접 입력", file: "season.py months()", note: "엔진 기본은 10월. 4~9월은 엔진 달력에 없어 가정으로 채움 (아래 C)" },
       { name: "시드", value: "화면에서 숨기고 실행마다 무작위 (1000~9999)", where: "seed", via: "우리가 정함", file: "SimulateEngine.tsx", note: "같은 시드는 같은 결과. 사건과 밤 결정의 추첨이 이 시드에서 나옴" },
@@ -104,21 +105,21 @@ const VAR_GROUPS: VarGroup[] = [
     title: "B. 매달 사용자가 바꾸는 운영 계획 6개",
     intro: "엔진 계획(plan)의 키는 건희 엔진 그대로이고, 화면의 조절 범위와 − + 간격은 우리가 정했습니다. '평소'는 건희 레포의 base_plan(대학로 가상 매장 현재 운영)입니다.",
     rows: [
-      { name: "삼겹살 1인분 가격", value: "15,000~25,000원, 1,000원 단위 (평소 19,000)", where: "meat_price", via: "건희 레포 파일", file: "season_params.yaml base_plan, hero_base prd_meat_price (S23, S25)" },
-      { name: "교대당 알바", value: "0~4명 (평소 2)", where: "staff_per_shift", via: "건희 레포 파일", file: "base_plan" },
-      { name: "마감 시간", value: "23~25시(새벽 1시) (평소 24)", where: "close_hour", via: "건희 레포 파일", file: "base_plan" },
-      { name: "반찬 가짓수", value: "3~8가지 (평소 5)", where: "banchan", via: "건희 레포 파일", file: "base_plan, season_params banchan (가정)" },
-      { name: "SNS 협찬 예산", value: "0~300만원, 50만원 단위 (평소 0)", where: "marketing_budget", via: "건희 레포 파일", file: "base_plan, season_params marketing (S82~S84 일부)" },
-      { name: "고기 등급", value: "국내산 등 등급 선택 (평소 국내산)", where: "meat_grade", via: "건희 레포 파일", file: "season_params meat_grade (가정 3개)" },
+      { name: "삼겹살 1인분 가격", value: "15,000~25,000원, 1,000원 단위 (평소 19,000)", where: "meat_price", via: "공유 연구 레포", file: "season_params.yaml base_plan, hero_base prd_meat_price (S23, S25)" },
+      { name: "교대당 알바", value: "0~4명 (평소 2)", where: "staff_per_shift", via: "공유 연구 레포", file: "base_plan" },
+      { name: "마감 시간", value: "23~25시(새벽 1시) (평소 24)", where: "close_hour", via: "공유 연구 레포", file: "base_plan" },
+      { name: "반찬 가짓수", value: "3~8가지 (평소 5)", where: "banchan", via: "공유 연구 레포", file: "base_plan, season_params banchan (가정)" },
+      { name: "SNS 협찬 예산", value: "0~300만원, 50만원 단위 (평소 0)", where: "marketing_budget", via: "공유 연구 레포", file: "base_plan, season_params marketing (S82~S84 일부)" },
+      { name: "고기 등급", value: "국내산 등 등급 선택 (평소 국내산)", where: "meat_grade", via: "공유 연구 레포", file: "season_params meat_grade (가정 3개)" },
     ],
   },
   {
     title: "C. 매달 나오는 사건과 밤 결정",
     intro: "사건은 한 달에 몇 개까지 확률로 뽑히고, 토요일 밤 결정은 달마다 2개가 시드로 뽑힙니다.",
     rows: [
-      { name: "사건 18종과 월별 확률 (10~3월)", value: "돼지고기 도매가 상승·하락, 비 오는 주간, 한파, 근처 고깃집 개점·폐점, 블로거 방문, 악성 리뷰, 위생 점검 등", where: "events.yaml prob", via: "건희 레포 파일", file: "events.yaml (S68, S48, S75, S13, S20, S91 등 근거 번호가 붙은 것과 가정 혼합)" },
+      { name: "사건 18종과 월별 확률 (10~3월)", value: "돼지고기 도매가 상승·하락, 비 오는 주간, 한파, 근처 고깃집 개점·폐점, 블로거 방문, 악성 리뷰, 위생 점검 등", where: "events.yaml prob", via: "공유 연구 레포", file: "events.yaml (S68, S48, S75, S13, S20, S91 등 근거 번호가 붙은 것과 가정 혼합)" },
       { name: "사건 확률 (4~9월)", value: "근거 없음. 축제·시험·장마(비)·한파 4종은 달마다 우리가 정한 값, 나머지 사건은 가까운 계절 달(3, 10, 11월)의 값을 그대로 씀", where: "_EXT_PROB, _PROXY", via: "우리가 정함", file: "sim/season.py", note: "화면과 이 장부에 가정이라고 표시. 바꿔도 되는 설정값" },
-      { name: "토요일 밤 결정 5종: 예약 없는 회식, 알바 지각, 고기 부족, 소나기, 블로거", value: "선택지 2~3개씩, 월 발생 횟수 1~2회", where: "events.yaml _night_decisions", via: "건희 레포 파일", file: "events.yaml", note: "모든 선택지와 월 횟수 태그가 '가정'. 선택은 그 달 계산에 먼저 반영" },
+      { name: "토요일 밤 결정 5종: 예약 없는 회식, 알바 지각, 고기 부족, 소나기, 블로거", value: "선택지 2~3개씩, 월 발생 횟수 1~2회", where: "events.yaml _night_decisions", via: "공유 연구 레포", file: "events.yaml", note: "모든 선택지와 월 횟수 태그가 '가정'. 선택은 그 달 계산에 먼저 반영" },
       { name: "신규 오픈 시작 상태", value: "리뷰 0, 낮은 인지도, 단골 최소 (기존 점포는 평점 4.2, 리뷰 180, 단골 25%)", where: "start_new", via: "우리가 정함", file: "season_params.yaml start_new (가정 3개)", note: "건희 레포에는 없고 우리가 추가. 단골 상한 0.35는 KOSIS 재방문율 34.75%와 일치" },
     ],
   },
@@ -126,8 +127,8 @@ const VAR_GROUPS: VarGroup[] = [
     title: "D. 엔진 내부 값 (건희 레포 그대로)",
     intro: "손님 구성, 체류 시간, 불판 교체, 만족도 가중치, 피로, 단골 형성, 인지도 같은 값은 바꾸지 않았습니다. 대학로 기준이며 대부분 가정입니다.",
     rows: [
-      { name: "hero_base.yaml: 가상 매장 변수 97개", value: "낮음 / 기본 / 높음 + 확신도", where: "H 10개, M 10개, L 62개 (나머지 14개는 확신도 없음)", via: "건희 레포 파일", file: "research/hero_base.yaml" },
-      { name: "season_params.yaml: 시즌 파라미터 105개", value: "근거 번호 13개(일부 가정과 섞임), 계산 8개, 화면용 1개, 가정 83개", where: "단골 형성 속도, 피로, 만족도 가중치, 반찬·직원·마케팅 효과, 폐업 규칙(60일) 등", via: "건희 레포 파일", file: "research/season_params.yaml" },
+      { name: "hero_base.yaml: 가상 매장 변수 97개", value: "낮음 / 기본 / 높음 + 확신도", where: "H 10개, M 10개, L 62개 (나머지 14개는 확신도 없음)", via: "공유 연구 레포", file: "research/hero_base.yaml" },
+      { name: "season_params.yaml: 시즌 파라미터 105개", value: "근거 번호 13개(일부 가정과 섞임), 계산 8개, 화면용 1개, 가정 83개", where: "단골 형성 속도, 피로, 만족도 가중치, 반찬·직원·마케팅 효과, 폐업 규칙(60일) 등", via: "공유 연구 레포", file: "research/season_params.yaml" },
       { name: "6개월 비교선 (평소와 비교)", value: "같은 시드로 평소 계획을 150회 돌린 평균", where: "baseline_runs = 150", via: "우리가 정함", file: "api/changeup.py, 시작 달마다 새로 계산(약 20초)" },
     ],
   },
@@ -149,8 +150,9 @@ const KEONHEE_ALREADY: Fill[] = [
 export default function SourcesGogi() {
   return (
     <>
+      <SourcesSummary industry="bbq" />
       <p>고깃집은 <b>우리 화면(동네 분석 → 가게 꾸미기 → 열기 전 점검 → 시뮬레이션)</b>이 기준입니다. 구분: <Tag v="API 연동" /> 키로 API를 불러 받음, <Tag v="파일 내려받기" /> 공개 파일을 내려받음,
-        <Tag v="건희 레포 파일" /> 건희 레포 파일을 복사해 씀, <Tag v="팀원 파일" /> 팀원이 정리한 엑셀·PDF, <Tag v="수빈 파일" /> 수빈 님 챗봇 파일, <Tag v="직접 입력" /> 사용자가 화면에 넣음, <Tag v="우리가 정함" /> 근거 없이 정한 값.</p>
+        <Tag v="공유 연구 레포" /> 공유받은 시뮬 연구 레포(sdic-persona-team1)를 복사해 씀, <Tag v="공유 자료" /> 공유받은 엑셀·PDF·JSON 자료, <Tag v="직접 입력" /> 사용자가 화면에 넣음, <Tag v="우리가 정함" /> 근거 없이 정한 값.</p>
       <ul>
         <li><a href="#g-all">1. 사용된 모든 데이터 출처</a></li>
         <li><a href="#g-tabs">2. 탭별 데이터 출처</a></li>
@@ -228,7 +230,7 @@ export default function SourcesGogi() {
         <tbody>
           <tr><td>육류 전문점 단독 손익 (매출, 식재료비, 인건비, 임차료, 영업이익률)</td><td>경영실태조사 2025 육류 전문점 행을 확보: 연매출 34,414만원, 식재료비 42.0%, 고용인 인건비 13.7%, 임차료 6.4%, 영업이익 9.3%. 매출은 동네 분석에 <b>배율 1.18로 반영</b>. 식재료비는 대학로 가상 매장의 31%를 그대로 둠 (10-15 결정, 아래 결정 필요)</td><td>열기 전 점검(본전), 시뮬(재료비 출금), 동네 분석 해석</td></tr>
           <tr><td>설비 단가 (불판·환기 포함 테이블, 주방, 계산대)</td><td>주방 1,500만원(육류 전문점 중앙값), 테이블 113·57만원(건희 값, 홀 비용÷테이블 수와 일치)으로 <b>10-16 반영</b>. 계산대·키오스크·냉장고·간판은 아직 가정</td><td>드는 돈, 가게 꾸미기 가격표</td></tr>
-          <tr><td>고기 도매가의 원가 전달, 숯·가스·전기 계절 변동</td><td>도매가 시계열은 있음(KMTA, 수빈 파일). 공과금은 월 고정, 계절 변동 자료 없음</td><td>시뮬(고깃값 사건, 월 관리비)</td></tr>
+          <tr><td>고기 도매가의 원가 전달, 숯·가스·전기 계절 변동</td><td>도매가 시계열은 있음(KMTA, 공유 자료). 공과금은 월 고정, 계절 변동 자료 없음</td><td>시뮬(고깃값 사건, 월 관리비)</td></tr>
           <tr><td>회식 단체 비중, 야장 효과, 점심 영업 효과</td><td>모두 가정. 인터뷰 정성 자료에 방향만 있음</td><td>시뮬(밤 결정, 계획)</td></tr>
           <tr><td>고깃집 평균 매출 분포 (폐업한 가게 포함)</td><td>구 평균은 살아남은 가게의 값이라 새 가게에 대한 기대치로는 높게 나올 수 있음</td><td>동네 분석 해석, 시뮬 손님 규모</td></tr>
         </tbody>

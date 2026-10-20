@@ -97,6 +97,8 @@ def _base_for(key: str) -> tuple[dict, dict]:
         for k, val in (st.get("params") or {}).items():
             base[k] = val
             base["_ref"][k] = val
+        if st.get("profile"):   # 동네의 요일·시간대·연령 비율 (store_input.from_changeup flow)
+            prof = {**prof, **{k: dict(v) for k, v in st["profile"].items()}}
         if "arrival_scale" in st:
             base["drv_arrival_rate"] = base["drv_arrival_rate"] * float(st["arrival_scale"])
             base["_ref"]["drv_arrival_rate"] = base["drv_arrival_rate"]
@@ -920,23 +922,29 @@ def _dp_clock(d: dict, occ: list[tuple], tables: int, queued: list[float]) -> fl
 
 
 def _decision_points(state: dict, su: dict, pick: tuple, plain_events: list[dict]) -> list[dict]:
-    """1-2 decision points for this month's night, drawn (seeded) among the kinds whose condition holds."""
+    """이번 달의 사건 하나 (2026-10-20부터 한 달에 하나): events.yaml 의 `months`에 이 달이 든 사건. 조건이 안 맞으면
+    (알바가 없는데 알바 사건 등) 달 제한이 없는 일반 사건 중에서 시드로 뽑는다."""
     cat = _dp_catalog()
     ok = {"always": True, "full": True, "staff": su["params"]["sto_parttimers"] >= 1, "terrace": bool(pick[2])}
     occ = _occupancy(plain_events)
     tables = sum(1 for _ in {e["table_id"] for e in plain_events if e["type"] == "seat"})
     queued = [e["t"] for e in plain_events if e["type"] == "queue"]
     clocks = {k: _dp_clock(d, occ, tables, queued) for k, d in cat.items()}
-    kinds = [k for k, d in cat.items() if ok.get(d["condition"], False) and clocks[k] is not None]
+    usable = [k for k, d in cat.items() if ok.get(d["condition"], False) and clocks[k] is not None]
+    cal = int(su["month"])
+    kinds = [k for k in usable if cal in (cat[k].get("months") or [])]
+    if not kinds:
+        kinds = [k for k in usable if not cat[k].get("months")]
     rng = _rng(state, 5)
-    chosen = sorted(rng.choice(kinds, size=min(2, len(kinds)), replace=False).tolist(), key=lambda k: clocks[k])
+    chosen = [rng.choice(kinds)] if kinds else []
     out = []
     for k in chosen:
         d = cat[k]
         out.append({"id": f"dp{state['month_index'] + 1}-{k}", "kind": k, "title_ko": d["title_ko"],
-                    "clock_min": clocks[k], "clock": _clock(clocks[k]),
+                    "clock_min": clocks[k],
+                    "clock": "이달" if d.get("months") and not d["clock_min"] else _clock(clocks[k]),   # 한 밤의 시각이 아니라 한 달 사건
                     "prompt_ko": (d["prompt_ko"] if not d.get("clock_window") else f"{_clock(clocks[k])}, {d['prompt_ko']}"), "default": d["default"], "monthly_count": d["monthly_count"]["value"],
-                    "count_tag": d["monthly_count"]["tag"],
+                    "count_tag": d["monthly_count"]["tag"], "count_note": d["monthly_count"].get("note"),
                     "options": [{"id": oid, "label_ko": o["label_ko"], "effect_hint_ko": o["effect_hint_ko"],
                                  "tag": "가정" if o["tag"] == "가정" else "근거", "source_id": None if o["tag"] == "가정" else o["tag"],
                                  "downside_ko": o["downside_ko"]} for oid, o in d["options"].items()]})
@@ -975,7 +983,7 @@ def _dp_effect(dp: dict, option_id: str, su: dict, slot: int) -> dict:
     labor = e.get("cost_hours", 0) * p["sto_parttime_wage"] * p["cst_holiday_pay_factor"] * e.get("cost_hour_mult", 1.0)
     food = e.get("cost_portions", 0) * p["cst_meat_cost_per_portion"] * e.get("cost_portion_premium", 0.0)
     return {"hooks": hooks, "mods": mods, "labor": labor, "food": food, "other": e.get("cost_won", 0),
-            "state": dict(e.get("state", {}))}
+            "state": dict(e.get("state", {})), "price_mult": e.get("price_mult", 1.0), "lam_mult": e.get("lam_mult", 1.0)}
 
 
 def _merge_mods(parts: list[dict]) -> dict:
@@ -1003,6 +1011,12 @@ def _dp_month_delta(dp: dict, option_id: str, su: dict, seed: int, pick: tuple, 
     eff = _dp_effect(dp, option_id, su, slot)
     k = _night_kpis(_night_sim(su, seed, pick, eff["hooks"], eff["mods"], log=False), su)
     night = {key: k[key] - plain[key] for key in k}
+    # 손님 수를 바꾸는 선택(한파, 장마, 축제 등)은 표본 한 밤을 다시 돌리지 않고 평소 밤의 값에 비율로 곱한다.
+    # 한 밤의 도착 수는 0.9와 0.93 같은 작은 차이를 구분하지 못해 선택지가 똑같이 나오기 때문이다 (자리가 모자라 돌려보내는 효과는 안 본다).
+    d_lam = eff["lam_mult"] - 1
+    for key in ("revenue", "food", "covers", "sat_sum"):
+        night[key] += plain[key] * d_lam
+    night["revenue"] += (plain["revenue"] * (1 + d_lam)) * (eff["price_mult"] - 1)   # 가격을 올린 선택: 같은 손님이 더 낸다
     n = dp["monthly_count"]
     p = su["params"]
     rev = n * night["revenue"]

@@ -3,10 +3,11 @@
 // The five checks sit below the stage and recompute as the store changes.
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
-import { Html, OrbitControls } from "@react-three/drei";
+import { Html } from "@react-three/drei";
 import { GLGuard } from "../shared/GLGuard";
 import Checks from "./Checks";
 import { Items, Piece, Room } from "./Parts3D";
+import { FitControls, StoreLights, ViewBar, gfxDpr, gfxFrameloop, gfxShadows, useGfx } from "./Scene3D";
 import {
   CATALOG, DEPOSIT_MONTHS, GRADES, ITEM, LOAN_RATE, cashLeft, ecosRates, eul, ymKo, fits, footprint, guStat, kitchenSpot, man, nextUid, openingCost, roomSize, snap,
   recommend, storeStats, type CatalogItem, type Grade, type Levers, type Placed, type Profile, type Store,
@@ -24,10 +25,8 @@ function Scene({ portal, store, tool, selected, ghost, onFloorMove, onFloorClick
   const sel = store.items.find((i) => i.uid === selected);
   return (
     <>
-      <ambientLight intensity={1.15} />
-      <directionalLight position={[-6, 12, 8]} intensity={1.7} castShadow shadow-mapSize={[1024, 1024]}
-        shadow-camera-left={-12} shadow-camera-right={12} shadow-camera-top={12} shadow-camera-bottom={-12} />
-      <Room w={w} d={d} grade={store.grade} />
+      <StoreLights w={w} d={d} r={Math.max(w, d) / 2 + 3} />
+      <Room w={w} d={d} grade={store.grade} pyeong={store.pyeong} items={store.items.filter((i) => !(tool?.kind === "move" && tool.uid === i.uid))} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} visible={false}
         onPointerMove={(e: ThreeEvent<PointerEvent>) => onFloorMove(e.point.x, e.point.z)}
         onClick={(e) => { if (e.delta < 5) onFloorClick(); }}>
@@ -61,7 +60,7 @@ function Scene({ portal, store, tool, selected, ghost, onFloorMove, onFloorClick
           <group rotation={[0, tool.rot ? Math.PI / 2 : 0, 0]}><Piece id={tool.id} /></group>
         </group>
       )}
-      <OrbitControls makeDefault enablePan={false} target={[0, 0.4, 0]} minDistance={7} maxDistance={30} minPolarAngle={0.2} maxPolarAngle={1.35} />
+      <FitControls box={[-w / 2, -d / 2, w / 2, d / 2 + 0.6]} />
     </>
   );
 }
@@ -85,6 +84,7 @@ const LOAN_STEP = 500;
 export default function Builder({ profile, store, setStore, levers, setLevers, onNext }: {
   profile: Profile; store: Store; setStore: (s: Store) => void; levers: Levers; setLevers: (l: Levers) => void; onNext: () => void;
 }) {
+  const gfx = useGfx();
   const [cat, setCat] = useState<CatalogItem["cat"]>("seat");
   const [tool, setTool] = useState<Tool>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -186,12 +186,13 @@ export default function Builder({ profile, store, setStore, levers, setLevers, o
       <div className="m-stage">
         <div ref={portal} className="m-canvas">
           <GLGuard>
-            <Canvas shadows camera={{ position: [w * 0.55, Math.max(w, d) * 0.95, d * 1.25], fov: 38 }} dpr={[1, 2]}>
+            <Canvas key={gfx} frameloop={gfxFrameloop(gfx)} shadows={gfxShadows(gfx)} camera={{ position: [w * 0.55, Math.max(w, d) * 0.95, d * 1.25], fov: 38 }} dpr={gfxDpr(gfx)}>
               <Scene portal={portal} store={store} tool={tool} selected={selected} ghost={ghost} onFloorMove={onFloorMove} onFloorClick={onFloorClick}
                 onPick={pick} onTurn={turn} onRemove={remove}
                 onMove={() => { if (sel) { setTool({ kind: "move", uid: sel.uid, id: sel.id, rot: sel.rot }); setGhost(null); setMsg("놓을 자리를 누르세요. R 키로 돌리고 Esc로 그만둬요."); } }} />
             </Canvas>
           </GLGuard>
+          <ViewBar />
         </div>
 
         <div className="m-room">

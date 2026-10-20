@@ -121,33 +121,39 @@ def _labor(ctx: dict, f: dict, day_rows: dict) -> tuple[float, int]:
     return round(paid, 1), round(paid * m._hourly_cost())   # owner_hours_per_day can be fractional (9.3)
 
 
-def scenario_points() -> list[dict]:
-    return s("scenario_points")
+def scenario_points(cal: int | None = None) -> list[dict]:
+    """달별 사건 (한 달에 하나). cal(1~12)을 주면 그 달의 사건만."""
+    pts = s("scenario_points")
+    return [p for p in pts if cal is None or p["month"] == cal]
 
 
-def default_scenario() -> dict:
-    return {p["id"]: p["default"] for p in scenario_points()}
+def default_scenario(cal: int) -> dict:
+    return {p["id"]: p["default"] for p in scenario_points(cal)}
 
 
-def clean_scenario(chosen: dict | None) -> dict:
-    """Chosen option per decision point; missing ones take the default, unknown ids are an error."""
-    out = default_scenario()
+def clean_scenario(chosen: dict | None, cal: int) -> dict:
+    """그 달 사건의 고른 선택지. 안 고른 것은 기본 선택지, 모르는 id는 오류."""
+    out = default_scenario(cal)
     for pid, oid in (chosen or {}).items():
-        pt = next((p for p in scenario_points() if p["id"] == pid), None)
+        pt = next((p for p in scenario_points(cal) if p["id"] == pid), None)
         if pt is None or oid not in {o["id"] for o in pt["options"]}:
-            raise ValueError(f"unknown scenario choice {pid}={oid}")
+            raise ValueError(f"unknown scenario choice {pid}={oid} for month {cal}")
         out[pid] = oid
     return out
 
 
 def _scn_effects(scn: dict) -> dict:
-    eff = {"walk_recover": 0.0, "demand_mult": 1.0, "ticket_mult": 1.0, "cost_krw": 0}
+    eff = {"walk_recover": 0.0, "demand_mult": 1.0, "ticket_mult": 1.0, "cost_krw": 0, "satisfaction": 0.0}
     for p in scenario_points():
-        o = next(x for x in p["options"] if x["id"] == (scn or {}).get(p["id"], p["default"]))
+        oid = (scn or {}).get(p["id"])
+        if oid is None:
+            continue
+        o = next(x for x in p["options"] if x["id"] == oid)
         eff["walk_recover"] += o.get("walk_recover", 0.0)
         eff["demand_mult"] *= o.get("demand_mult", 1.0)
         eff["ticket_mult"] *= o.get("ticket_mult", 1.0)
         eff["cost_krw"] += o.get("cost_krw", 0)
+        eff["satisfaction"] += o.get("satisfaction", 0.0)
     return eff
 
 
@@ -409,7 +415,8 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
     ctx = _context(run["cfg"])
     i = len(run["months"])
     dec = apply_decisions(st["decisions"], body or {})
-    scn = clean_scenario((body or {}).get("scenario"))
+    cal = _calendar(run, i)
+    scn = clean_scenario((body or {}).get("scenario"), cal)
     lo, hi = s("price_level_range")
     st["price_level"] = _clamp(st["price_level"] * (1 + dec["price_change_pct"] / 100), lo, hi)
     lift_ratio = 1 - math.exp(-dec["marketing_krw"] / s("marketing_half_krw"))
@@ -419,7 +426,6 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
     if "rent_hike" in keys:
         st["rent_mult"] = 1 + s("rent_hike_pct")
     viral = (s("viral_demand_mult") if "viral" in keys else 1.0) * (s("viral_carry_mult") if st["viral_last"] else 1.0)
-    cal = _calendar(run, i)
     f = {"season": s("seasonality_by_quarter")[(cal - 1) // 3 + 1], "rating": st["rating"],
          "maturity": _maturity(st["regulars_idx"]), "price_level": st["price_level"], "hours": dec["hours"],
          "staff": dec["staff_policy"], "marketing_krw": dec["marketing_krw"], "dessert": dec["dessert"],
@@ -440,7 +446,7 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
 
     # reputation drift from this month's service
     sat = (s("satisfaction_walkaway") * e["walkaway_share"] + s("satisfaction_price") * (st["price_level"] - 1)
-           + s("satisfaction_staff")[dec["staff_policy"]] + (s("satisfaction_dessert") if dec["dessert"] else 0)
+           + _scn_effects(scn)["satisfaction"] + s("satisfaction_staff")[dec["staff_policy"]] + (s("satisfaction_dessert") if dec["dessert"] else 0)
            + (s("satisfaction_breakdown") if f["breakdown"] else 0))
     rating0, idx0 = st["rating"], st["regulars_idx"]
     st["rating"] = rating0 + s("rating_speed") * (_clamp(s("rating_start") + s("rating_per_satisfaction") * sat,
@@ -462,7 +468,7 @@ def play_month(run: dict, body: dict | None = None) -> tuple[dict, dict]:
         "decisions": {**dec, "price_level": round(st["price_level"], 4),
                       "open_hour": s("hours")[dec["hours"]][0], "close_hour": s("hours")[dec["hours"]][1],
                       "scenario": scn},
-        "scenario_ko": [{"title": p["title"], "choice": o["label"]} for p in scenario_points() for o in p["options"]
+        "scenario_ko": [{"title": p["title"], "choice": o["label"]} for p in scenario_points(cal) for o in p["options"]
                         if o["id"] == scn[p["id"]]],
         "kpi": {"revenue_krw": e["revenue_krw"], "op_krw": e["op_krw"],
                 "op_margin": round(e["op_krw"] / e["revenue_krw"], 3) if e["revenue_krw"] else 0.0,
@@ -513,10 +519,11 @@ def scenario_preview(run: dict, body: dict | None = None) -> dict:
     dec = apply_decisions(st["decisions"], body or {})
     lift_ratio = 1 - math.exp(-dec["marketing_krw"] / s("marketing_half_krw"))
     events = _events(run, ctx, len(run["months"]), lift_ratio)
-    pts = [{"id": p["id"], "clock": p["clock"], "title": p["title"], "prompt": p["prompt"], "count": p["count"],
+    cal = _calendar(run, len(run["months"]))
+    pts = [{"id": p["id"], "clock": p["clock"], "title": p["title"], "prompt": p["prompt"], "note": p["note"],
             "default": p["default"],
-            "options": [{k: o[k] for k in ("id", "label", "hint", "downside")} for o in p["options"]]}
-           for p in scenario_points()]
+            "options": [{"id": o["id"], "label": o["label"], "hint": o["hint"], "downside": o["downside"]} for o in p["options"]]}
+           for p in scenario_points(cal)]
     return {"month": len(run["months"]) + 1, "events": events, "points": pts, "grade": "가정",
             "note_ko": "대응이 그달 계산에 미치는 크기는 모두 가정값"}
 

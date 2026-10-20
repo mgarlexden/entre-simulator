@@ -1,13 +1,15 @@
 // Step 4 (engine). 건희 엔진(sim.season)이 한 달에 한 번 계산하고, 화면은 그 한 달을 날마다 풀어서 보여 준다.
 // 화면 전체가 3D 가게이고, 위에는 지표 줄, 오른쪽에는 영수증 형태의 현금 흐름 기록이 있다.
-// 한 달의 순서: 운영 계획 팝업 → (이번 달 토요일 밤에 생길 일의 대응 팝업) → 하루씩 재생 → 정산 팝업 → 다음 달 운영 계획.
+// 한 달의 순서: 운영 계획 팝업 → (이달의 사건 대응 팝업) → 하루씩 재생 → 정산 팝업 → 다음 달 운영 계획.
 // 날마다의 값은 엔진이 만든 밤별 매출·손님을 그달 합계에 맞춰 나눈 것이고, 월세·급여·생활비·이자는 지급일에 빠진다.
 // 엔진 서버(api/changeup.py, 포트 8010)가 필요하다. 목업 계산(sim.ts)은 쓰지 않는다.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
 import { GLGuard } from "../shared/GLGuard";
-import { Items, Room, seatSpots } from "./Parts3D";
+import { Items, Room, TableLife, seatPoses } from "./Parts3D";
+import { FitControls, People, StoreLights, ViewBar, gfxDpr, gfxFrameloop, gfxShadows, useGfx, type Person } from "./Scene3D";
+import { flowRatioNote } from "./DongFlow";
+import { flowShape, profileOf } from "./area";
 import "./simulate-engine.css";
 import { setEngineCtx } from "./chatContext";
 import { LOAN_RATE, OWNER_DRAW, guStat, man, openingCost, roomSize, storeStats, type Levers, type Profile, type Store } from "./model";
@@ -21,7 +23,7 @@ type Plan = { meat_price: number; staff_per_shift: number; close_hour: number; m
 type Night = { dow: string; rain: boolean; revenue: number; covers: number; walkaways: number; cogs: number; fees: number };
 type Ev = { id: string; label: string; group: string; mechanism: string | null; outcome?: string | null };
 type Option = { id: string; label: string; hint: string; downside: string; tag: string };
-type Dp = { id: string; kind: string; title: string; prompt: string; clock: string; default: string; count: number; count_tag: string; options: Option[] };
+type Dp = { id: string; kind: string; title: string; prompt: string; clock: string; default: string; count: number; count_tag: string; count_note?: string | null; options: Option[] };
 type Decision = Dp & {
   chosen: string; chosen_label: string; default_label: string; month_op: number; month_revenue: number; vs_default_op: number;
   night: { revenue: number; op: number; covers: number; walkaways: number; satisfaction: number }; state: Record<string, number>;
@@ -204,16 +206,18 @@ function buildDays(r: MonthResult, cashStart: number, year: number, ctx: { imput
 
 // ---------------------------------------------------------------- 3D와 작은 부품
 function Guests({ store, filled }: { store: Store; filled: number }) {
-  const spots = useMemo(() => seatSpots(store.items), [store.items]);
+  const spots = useMemo(() => seatPoses(store.items), [store.items]);
   const order = useMemo(() => spots.map((_, i) => i).sort((a, b) => ((a * 7919) % 13) - ((b * 7919) % 13)), [spots]);
+  // seated low-poly guests (store3d/Figures) facing their grill, forearms toward the table
+  const list = useMemo(() => order.slice(0, filled).map((i): Person => {
+    const [x, z, h] = spots[i];
+    return { x: x - Math.sin(h) * 0.04, z: z - Math.cos(h) * 0.04, heading: h, seated: true, seed: i + 1, shirt: SHIRTS[i % SHIRTS.length], armsUp: 0.5 };
+  }), [order, spots, filled]);
+  const seated = useMemo(() => order.slice(0, filled), [order, filled]);
   return (
     <>
-      {order.slice(0, filled).map((i) => (
-        <group key={i} position={[spots[i][0], 0, spots[i][1]]}>
-          <mesh position={[0, 0.72, 0]} castShadow><capsuleGeometry args={[0.15, 0.36, 4, 10]} /><meshStandardMaterial color={SHIRTS[i % SHIRTS.length]} roughness={0.8} /></mesh>
-          <mesh position={[0, 1.18, 0]} castShadow><sphereGeometry args={[0.13, 14, 12]} /><meshStandardMaterial color="#f1d3b8" roughness={0.7} /></mesh>
-        </group>
-      ))}
+      <People list={list} />
+      <TableLife items={store.items} seated={seated} />
     </>
   );
 }
@@ -354,7 +358,7 @@ function DecisionCard({ d, alts, busy, onTry }: { d: Decision; alts: Record<stri
       <dl className="sx-dres-nums">
         <div><dt>그 밤 매출</dt><dd className={tone(d.night.revenue)}>{signedMan(d.night.revenue)}</dd></div>
         <div><dt>그 밤 손님</dt><dd className={tone(d.night.covers)}>{d.night.covers > 0 ? "+" : d.night.covers < 0 ? "−" : ""}{Math.abs(Math.round(d.night.covers))}명</dd></div>
-        <div className="main"><dt>이달 영업이익<Q>이런 밤이 한 달에 {d.count}번 있다고 보고(가정) 이달 값에 곱했어요.</Q></dt><dd className={tone(d.month_op)}>{signedMan(d.month_op)}</dd></div>
+        <div className="main"><dt>이달 영업이익<Q>이런 밤이 한 달에 {d.count}번 있다고 보고(가정) 그 밤의 차이를 이달 값에 곱했어요.</Q></dt><dd className={tone(d.month_op)}>{signedMan(d.month_op)}</dd></div>
       </dl>
       {st.length > 0 && <p className="sx-dres-state">{st.map(([k, x]) => <span key={k} className={`sx-chip ${tone(k === "fatigue" ? -x : x)}`}>{STATE_KO[k](x)}</span>)}</p>}
       <p className="sx-dres-vs">
@@ -403,6 +407,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
   const [engineState, setEngineState] = useState<Record<string, unknown> | null>(null);
   const [done, setDone] = useState<Done[]>([]);
   const [plan, setPlan] = useState<Plan>({ meat_price: levers.price, staff_per_shift: Math.min(4, levers.staff), close_hour: 24, marketing_budget: 0, meat_grade: "domestic", banchan: 5, delivery: "none" });
+  const gfx = useGfx();
   const [view, setView] = useState<View>("intro");
   const [fade, setFade] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -444,11 +449,13 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
     return () => window.removeEventListener("resize", measure);
   }, []);
 
+  const dongCode = profile.dong && profile.dong.gu === profile.gu ? profileOf(profile.gu, profile.dong.name)?.code : undefined;
   const spec = () => ({
     gu_sales_man: st.salesHansik, // 엔진 기준 점포(대학로 고깃집)가 한식음식점 평균에 맞춰져 있어 한식 기준 값을 준다 (육류 배율을 또 곱하면 두 번 센다)
     pyeong: store.pyeong, tables: Math.max(1, stats.tables), seats: stats.seats, cash_rent_man_per_pyeong: st.rent,
     staff: plan.staff_per_shift, price: plan.meat_price, baseline_runs: 150, quarter_index: st.qidx, area_type: st.areaType ?? "일반",
     start_month: startMonth,
+    flow: flowShape(dongCode, profile.gu), // 동네의 요일·시간대·연령 비율 (없으면 엔진이 기준 상권 값을 씀)
   });
 
   const post = async (path: string, body: unknown) => {
@@ -473,7 +480,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
     } catch (e) { setErr(String(e)); setBusy(false); }
   };
 
-  // 운영 계획을 확정하면 먼저 이번 달 사건과 토요일 밤의 결정 상황을 받는다
+  // 운영 계획을 확정하면 먼저 이번 달 사건과 그 달 사건의 대응 상황을 받는다
   const startMonthCall = async () => {
     if (!engineState) return;
     setErr(""); setBusy(true);
@@ -616,15 +623,15 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
     <div className="sx-root" style={{ top }}>
       <div className="sx-canvas">
         <GLGuard>
-          <Canvas shadows camera={{ position: [w * 0.7, Math.max(w, d) * 1.2, d * 1.6], fov: 38 }} dpr={[1, 2]}>
-            <ambientLight intensity={!curDay || curDay.open ? 1.15 : 0.6} />
-            <directionalLight position={[-6, 12, 8]} intensity={!curDay || curDay.open ? 1.7 : 0.5} castShadow shadow-mapSize={[1024, 1024]} />
-            <Room w={w} d={d} grade={store.grade} />
+          <Canvas key={gfx} frameloop={gfxFrameloop(gfx)} shadows={gfxShadows(gfx)} camera={{ position: [w * 0.7, Math.max(w, d) * 1.2, d * 1.6], fov: 38 }} dpr={gfxDpr(gfx)}>
+            <StoreLights w={w} d={d} r={Math.max(w, d) / 2 + 3} dim={!curDay || curDay.open ? 1 : 0.45} />
+            <Room w={w} d={d} grade={store.grade} pyeong={store.pyeong} items={store.items} />
             <Items items={store.items} />
             <Guests store={store} filled={view === "intro" || view === "plan" || view === "scenario" ? 0 : filled} />
-            <OrbitControls enablePan={false} target={[0, 0.4, 0]} minDistance={7} maxDistance={30} minPolarAngle={0.2} maxPolarAngle={1.35} />
+            <FitControls box={[-w / 2, -d / 2, w / 2, d / 2 + 0.6]} dir={[0.7, 1.2, 1.6]} />
           </Canvas>
         </GLGuard>
+        <ViewBar />
       </div>
 
       <header className="sx-hud">
@@ -730,7 +737,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
                     <h2>이렇게 진행돼요</h2>
                     <ol className="sx-flow">
                       <li><b>운영 계획</b><span>달마다 가격·알바·마감 등을 정해요.</span></li>
-                      <li><b>토요일 밤 대응</b><span>그달에 생길 일 2가지에 어떻게 대응할지 골라요.</span></li>
+                      <li><b>이달의 사건</b><span>그 달 달력에 맞는 사건이 하나 생겨요. 어떻게 대응할지 골라요.</span></li>
                       <li><b>영업</b><span>엔진이 그달을 계산하고 하루씩 보여 줘요.</span></li>
                       <li><b>정산</b><span>매출·비용과 내 선택의 결과를 확인해요.</span></li>
                     </ol>
@@ -810,7 +817,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
                     </section>
                   )}
                   <section className="sx-sec">
-                    <h2>토요일 밤, 어떻게 대응할까요?</h2>
+                    <h2>이달의 사건, 어떻게 대응할까요?</h2>
                     <p className="sx-note">고른 대응대로 그달 계산에 반영돼요. 처음에는 기본 대응이 골라져 있어요.</p>
                   </section>
                   <div className="sx-dps">
@@ -820,7 +827,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
                         <header className="sx-dp-h"><span className="sx-clock">{dp.clock}</span><h3 id={`${dp.id}-h`}>{dp.title}</h3></header>
                         <div className="sx-dp-q">
                           <p>{dp.prompt}</p>
-                          <small>이런 밤이 한 달에 {dp.count}번쯤 있다고 가정했어요.</small>
+                          <small>{dp.count_note ?? `이런 밤이 한 달에 ${dp.count}번쯤 있다고 가정했어요`}. 효과 크기는 가정이에요.</small>
                         </div>
                         <div className="sx-dp-opts">
                           {dp.options.map((o) => (
@@ -859,6 +866,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
                       { label: "손님", value: `${fmt(Math.round(r.kpis.covers))}명` },
                       { label: "월말 현금", value: man(won(cur.cashEnd)) },
                     ]} />
+                    {flowRatioNote(dongCode, profile.gu, r.kpis.covers) && <p className="sx-note">{flowRatioNote(dongCode, profile.gu, r.kpis.covers)}</p>}
                     {r.closed && <p className="se-err">현금이 두 달 연속 바닥이라 가게를 닫게 됐어요.</p>}
 
                     <div className="sx-settle">
@@ -897,7 +905,7 @@ export default function SimulateEngine({ profile, store, levers, onBack }: {
                       </div>
                       {r.waterfall.length > 0 && (
                         <ul className="sx-wf">
-                          {r.waterfall.map((w) => <li key={w.driver}><span>{w.driver.replace("밤 결정: ", "토요일 밤 · ")}</span><b className={tone(w.delta)}>{signedMan(w.delta)}</b></li>)}
+                          {r.waterfall.map((w) => <li key={w.driver}><span>{w.driver.replace("밤 결정: ", "이달의 사건 · ")}</span><b className={tone(w.delta)}>{signedMan(w.delta)}</b></li>)}
                         </ul>
                       )}
                     </section>

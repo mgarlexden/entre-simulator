@@ -649,19 +649,25 @@ def test_guided_night_decisions_have_playable_branches():
 
 def test_reviews_name_the_decisions_that_touched_them():
     """§12.3: reviews from the decision night carry cause_decisions (and decision_party for the decision's own party);
-    month reviews carry none; a comped blogger always writes; unknown decision ids raise."""
-    st = S.new_season(7)
-    st["month_index"] = 2
-    start = S.start_month(st, S.base_plan())
-    assert {d["kind"] for d in start["decision_points"]} >= {"blogger"}
-    bl = next(d for d in start["decision_points"] if d["kind"] == "blogger")
-    r = S.play_month(st, S.base_plan(), band_runs=3, night_choices={bl["id"]: "comp"})
+    month reviews carry none; declining the party leaves no party review; unknown decision ids raise.
+    달별 사건 이후 3월 개강 총회 단체 문의가 그 달의 유일한 결정이다(시작 10월이면 5번째 달). 협찬 후기처럼 반드시 쓰는 손님이
+    없어서 후기는 확률로 나오므로, 단체 손님의 후기가 나올 때까지 시드를 바꿔 본다."""
+    r = dp = start = st = None
+    for seed in range(7, 31):
+        st = S.new_season(seed)
+        st["month_index"] = 5
+        start = S.start_month(st, S.base_plan())
+        assert [d["kind"] for d in start["decision_points"]] == ["semester_party"]
+        dp = start["decision_points"][0]
+        r = S.play_month(st, S.base_plan(), band_runs=3, night_choices={dp["id"]: "course"})
+        if any(x.get("decision_party") == dp["id"] for x in r["reviews"]):
+            break
     night = [x for x in r["reviews"] if x.get("from_decision_night")]
     assert r["decision_reviews"] == len(night) >= 1
-    assert any(x["decision_party"] == bl["id"] and "comp" in x["reason_codes"] for x in night)
     assert all(x["cause_decisions"] and set(x["cause_decisions"]) <= {d["id"] for d in start["decision_points"]} for x in night)
+    assert any(x["decision_party"] == dp["id"] for x in night)
     assert all(x["cause_decisions"] == [] and x["decision_party"] is None for x in r["reviews"] if not x.get("from_decision_night"))
-    declined = S.play_month(st, S.base_plan(), band_runs=3, night_choices={bl["id"]: "decline"})
-    assert not any(x["decision_party"] == bl["id"] for x in declined["reviews"])
+    declined = S.play_month(st, S.base_plan(), band_runs=3, night_choices={dp["id"]: "decline"})
+    assert not any(x["decision_party"] == dp["id"] for x in declined["reviews"])
     with pytest.raises(ValueError):
         S.play_month(st, S.base_plan(), band_runs=3, night_choices={"dp9-nope": "x"})

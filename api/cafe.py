@@ -13,17 +13,24 @@ from collections import OrderedDict
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from sim import cafe
 from sim.cafe import season as cafe_season
-from sim.cafe.params import model_version
+from sim.cafe.params import load_districts, model_version
 
 router = APIRouter(prefix="/cafe", tags=["cafe"])
 
 
 class CafeIn(BaseModel):
     district: str = Field(..., min_length=7, max_length=8)  # 상권 코드 3곳 또는 서울 행정동 코드(sim/cafe/build_dongs.py)
+
+    @field_validator("district")
+    @classmethod
+    def _known_district(cls, v: str) -> str:
+        if v not in load_districts():
+            raise ValueError(f"unknown district {v}")
+        return v
     size_pyeong: int = Field(..., ge=10, le=40)
     tables: int = Field(..., ge=0, le=40)
     chairs: int = Field(..., ge=0, le=160)

@@ -7,6 +7,7 @@ import DongMap, { dongRange } from "./DongMap";
 import Icon from "./Icons";
 import { BbqComp, CafeComp } from "./DongComp";
 import DongTrdar from "./DongTrdar";
+import DongFlow from "./DongFlow";
 import { DONG_METRICS, bandOf, dongMetricKeys, cuts, geoOf, guInsight, hasDongMap, insightOf, meatSalesNote, picksOf, profileOf, profilesOf, rankWord, type DongMetric, type KTab, type Line, type Tone } from "./area";
 import { BANKS, BANK_COMPARE_URL, BANK_GUARANTEE_URL, FUNDS, FUNDS_SRC, type Fund } from "./funds";
 import KStartup from "./KStartup";
@@ -274,6 +275,8 @@ export default function Analysis({ profile, setProfile, gus, onNext }: {
                 )}
               </section>
             )}
+
+            <DongFlow code={dp && st.area ? dp.code : undefined} gu={profile.gu} dong={st.area ?? null} />
 
             {dp && st.area && <DongTrdar code={dp.code} dong={st.area} />}
 

@@ -3,6 +3,7 @@
 // 엔진은 손님 한 명씩이 아니라 시간대별 주문·처리 능력을 계산하므로, 영업 장면은 하루 시간대를 따라 의자가 차고 비는 모습으로 보여 준다.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { profileOf } from "./area";
+import { flowRatioNote } from "./DongFlow";
 import { areaFx, engineBody, type CafeCfg } from "./cafeChecks";
 import CafeRoom3D from "./CafeRoom3D";
 import { ENGINE, type Preview } from "./useCafePreview";
@@ -54,7 +55,7 @@ type Month = {
   state_token: string;
 };
 type Opt = { id: string; label: string; hint: string; downside: string };
-type Point = { id: string; clock: string; title: string; prompt: string; count: number; default: string; options: Opt[] };
+type Point = { id: string; clock: string; title: string; prompt: string; note: string; default: string; options: Opt[] };
 type Dps = { month: number; events: { key: string; label_ko: string; effect_ko: string }[]; points: Point[] };
 type Rec = { lever: Lever; last: string; next: Dec; nextText: string; change: boolean; why: string };
 // 고르지 않은 대응을 골랐다면: 같은 달을 그 대응으로 한 번 더 계산한 결과 (고른 뒤에만 계산하고, 저장하지 않는다)
@@ -107,10 +108,10 @@ function Stepper({ lv, plan, prev, set }: { lv: Lever; plan: Dec; prev?: Dec; se
     </div>
   );
 }
-function Cash({ start, months }: { start: number; months: Month[] }) {
+function Cash({ start, months, total }: { start: number; months: Month[]; total: number }) {
   const pts = [start, ...months.map((m) => m.kpi.cash_krw)];
   const lo = Math.min(0, ...pts), hi = Math.max(1, ...pts), W = 340, H = 120;
-  const x = (i: number) => 10 + (i * (W - 20)) / 12, y = (v: number) => 8 + ((hi - v) / Math.max(1, hi - lo)) * (H - 22);
+  const x = (i: number) => 10 + (i * (W - 20)) / total, y = (v: number) => 8 + ((hi - v) / Math.max(1, hi - lo)) * (H - 22);
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="cs-chart" role="img" aria-label="남은 현금">
       <line x1="0" x2={W} y1={y(0)} y2={y(0)} className="cs-zero" />
@@ -241,6 +242,7 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
     </section></main>
   );
 
+  const TOTAL: number = start?.months_total ?? 6; // 한 시즌의 달 수 (엔진 season.months)
   const startCash: number = start ? start.start.cash_krw : 0;
   const cur = last;
   const prevPlan = months.length > 1 ? months[months.length - 2].decisions : undefined;
@@ -259,8 +261,8 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
         <Metric icon={<IconCash />} label="현금" tip={<>문을 열고 남은 운영자금이에요. 매달 영업이익이 더해지고, 대출 이자와 원금은 빠져요. 개업 비용을 낸 뒤 통장에 남은 돈에서 시작해요.</>}>
           {wman(cur ? cur.kpi.cash_krw : startCash)}
         </Metric>
-        <Metric icon={<IconCal />} label="달" tip={<>시작 달부터 12개월을 한 달씩 진행해요.</>}>
-          {cur ? `${cur.calendar_month}월 · ${cur.month}/12` : start ? `${start.start_month}월 시작` : `${startMonth}월 시작`}
+        <Metric icon={<IconCal />} label="달" tip={<>시작 달부터 {TOTAL}개월을 한 달씩 진행해요.</>}>
+          {cur ? `${cur.calendar_month}월 · ${cur.month}/${TOTAL}` : start ? `${start.start_month}월 시작` : `${startMonth}월 시작`}
         </Metric>
         <Metric icon={<IconStar />} label="별점 · 자리잡기"
           tip={<>
@@ -283,7 +285,7 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
         {chartOpen && start && (
           <aside className="sx-chartpanel" aria-label="남은 현금 그래프">
             <p className="sx-panel-h"><span>남은 현금</span><b>{wman(cur ? cur.kpi.cash_krw : startCash)}</b></p>
-            <Cash start={startCash} months={months} />
+            <Cash start={startCash} months={months} total={TOTAL} />
             <small>빨간 점선은 0원이에요. 점은 한 달이 끝난 때의 현금이에요.</small>
           </aside>
         )}
@@ -317,7 +319,7 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
             {view === "intro" && (
               <>
                 <div className="sx-scroll">
-                  <h1>{place}에서 12개월</h1>
+                  <h1>{place}에서 {TOTAL}개월</h1>
                   <Kpis items={[
                     { label: "가게", value: `${cfg.pyeong}평 · ${pv?.seats.total ?? "-"}석` },
                     { label: "평당 월세", value: `${guStat(profile.gu).rent}만원` },
@@ -328,7 +330,7 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
                     <h2>이렇게 진행돼요</h2>
                     <ol className="sx-flow">
                       <li><b>운영 계획</b><span>달마다 가격·영업시간·직원·마케팅·디저트를 정해요.</span></li>
-                      <li><b>이달의 사건과 대응</b><span>그달에 생길 사건을 보고, 주말 줄과 한가한 평일 낮에 어떻게 대응할지 골라요.</span></li>
+                      <li><b>이달의 사건</b><span>그 달 달력에 맞는 사건이 하나 생겨요. 어떻게 대응할지 골라요.</span></li>
                       <li><b>영업</b><span>엔진이 그달을 계산하고 하루 시간대를 따라 의자가 차고 비는 모습을 보여 줘요.</span></li>
                       <li><b>정산</b><span>매출·비용과 달라진 이유를 확인해요.</span></li>
                     </ol>
@@ -413,7 +415,7 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
                         <header className="sx-dp-h"><span className="sx-clock">{dp.clock}</span><h3 id={`${dp.id}-h`}>{dp.title}</h3></header>
                         <div className="sx-dp-q">
                           <p>{dp.prompt}</p>
-                          <small>이런 날이 한 달에 {dp.count}번쯤 있다고 가정했어요.</small>
+                          <small>{dp.note}. 효과 크기는 가정이에요.</small>
                         </div>
                         <div className="sx-dp-opts">
                           {dp.options.map((o) => (
@@ -450,6 +452,7 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
                     { label: "돌아간 손님", value: `${cur.kpi.walkaways.toLocaleString("ko-KR")}명 (${Math.round(cur.kpi.walkaway_share * 100)}%)` },
                   ]} />
                   <p className="sx-note">{cur.owner_note_ko}</p>
+                  {flowRatioNote(code ? String(code) : undefined, profile.gu, cur.kpi.customers) && <p className="sx-note">{flowRatioNote(code ? String(code) : undefined, profile.gu, cur.kpi.customers)}</p>}
                   {pts.length > 0 && hist.current[months.length - 1] && (
                     <section className="sx-sec">
                       <h2>내 선택의 결과</h2>
@@ -494,7 +497,7 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
                     <section className="sx-sec"><h2>손익</h2>
                       <table className="sx-table"><tbody>
                         <tr><th>매출</th><td>{wman(cur.pnl.revenue_krw)}</td></tr>
-                        {cur.pnl.lines.filter((l) => l.krw !== 0).map((l) => <tr key={l.key}><th>{l.item_ko}</th><td>−{wman(l.krw)}</td></tr>)}
+                        {cur.pnl.lines.filter((l) => l.krw !== 0).map((l) => <tr key={l.key}><th>{l.item_ko}</th><td>{l.krw < 0 ? "+" : "−"}{wman(Math.abs(l.krw))}</td></tr>)}
                         <tr><th>영업이익</th><td className={tone(cur.pnl.op_krw)}>{sgn(cur.pnl.op_krw)}</td></tr>
                       </tbody></table>
                     </section>
@@ -523,8 +526,8 @@ export default function CafeSim({ profile, cfg, onBack }: { profile: Profile; cf
                         { label: "가장 좋았던 달", value: `${report.best_month.calendar_month}월 ${sgn(report.best_month.op_krw)}` },
                         { label: "가장 나빴던 달", value: `${report.worst_month.calendar_month}월 ${sgn(report.worst_month.op_krw)}` },
                       ]} />
-                      <p className="sx-note">{report.survived ? "12개월을 버텼어요. " : <b>가게를 닫게 됐어요. </b>}{report.summary_ko}</p>
-                      <section className="sx-sec"><h2>남은 현금</h2><Cash start={startCash} months={months} /></section>
+                      <p className="sx-note">{report.survived ? `${TOTAL}개월을 버텼어요. ` : <b>가게를 닫게 됐어요. </b>}{report.summary_ko}</p>
+                      <section className="sx-sec"><h2>남은 현금</h2><Cash start={startCash} months={months} total={TOTAL} /></section>
                       <section className="sx-sec"><h2>월별</h2>
                         <table className="sx-table"><thead><tr><th>달</th><th>매출</th><th>영업이익</th><th>월말 현금</th></tr></thead>
                           <tbody>{report.months.map((x: any) => <tr key={x.month}><td>{x.calendar_month}월</td><td>{wman(x.revenue_krw)}</td><td className={tone(x.op_krw)}>{sgn(x.op_krw)}</td><td>{wman(x.cash_krw)}</td></tr>)}</tbody></table>

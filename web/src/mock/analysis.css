@@ -251,3 +251,22 @@
   .t-top { grid-area: top; } .t-card h3 { grid-area: name; } .t-card > p { grid-area: why; } .t-warn { grid-area: warn; }
   .t-stats { grid-area: stats; align-self: center; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* 동네 분석: 이 동네 지나가는 사람 (DongFlow.tsx) */
+.a-flow { display: grid; gap: 14px; padding: 22px 24px; border-radius: 26px; background: #fff; box-shadow: 0 4px 22px rgba(35, 60, 130, 0.08); }
+.a-flow .a-kw-eyebrow { color: #4b6bff; }
+.a-flow header { display: grid; gap: 4px; }
+.a-flow header small, .fl-src { color: #5b6b82; font-size: 13px; line-height: 1.5; }
+.fl-big { margin: 0; font-size: clamp(20px, 2vw, 26px); font-weight: 700; }
+.fl-big mark { background: none; color: #2b4fe0; }
+.fl-lead { margin: 0; line-height: 1.6; }
+.fl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
+.fl-grid h3 { margin: 0 0 6px; font-size: 15px; } .fl-grid h3 small { font-weight: 400; color: #5b6b82; margin-inline-start: 6px; }
+.fl-bars { display: flex; align-items: flex-end; gap: 6px; block-size: 108px; }
+.fl-bars > div { flex: 1; display: grid; grid-template-rows: auto auto auto; justify-items: center; align-content: end; gap: 3px; font-size: 11px; color: #5b6b82; }
+.fl-bars i { inline-size: 100%; max-inline-size: 26px; border-radius: 4px 4px 0 0; background: #c9d6f5; }
+.fl-bars .is-hi i { background: #3a5fe5; } .fl-bars .is-hi b { color: #14233a; }
+.fl-bars b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.fl-pop { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: baseline; margin: 0; }
+.fl-pop b { font-variant-numeric: tabular-nums; } .fl-pop small { flex-basis: 100%; color: #5b6b82; font-size: 13px; }
+.fl-src { margin: 0; }
