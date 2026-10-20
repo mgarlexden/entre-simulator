@@ -178,7 +178,7 @@ function rows(d: GuData | null): { title: string; rows: Row[] }[] {
         { item: "비 오는 날 손님", value: "−10%", kind: "차용", source: "research/shocks.yaml SH10", note: "원 레포도 가정으로 표시한 값" },
         { item: "하루 손님의 흔들림", value: "±12%", kind: "가정", source: "sim.ts step" },
         { item: "돈이 나가는 날", value: "월세 1일, 급여 10일(둘째 달부터), 생활비와 이자 25일", kind: "가정", source: "sim.ts step" },
-        { item: "대출 이자", value: "연 6%, 이자만 냄", kind: "가정", source: "model.ts LOAN_RATE" },
+        { item: "대출 이자", value: "예금은행 신규취급 중소기업대출 최신 금리, 이자만 냄 (파일이 없으면 연 6% 가정)", kind: "실측", source: "한국은행 ECOS 121Y006 (pipelines/fetch_ecos.py → ecos_rates.json)", note: "정책자금 금리가 아니라 은행 평균이에요. 이자만 내는 방식은 가정" },
         { item: "만족도", value: "80%에서 시작, 손님을 20% 넘게 돌려보낸 날 −0.3, 직원이 받을 수 있는 한도까지 찬 날 −0.2, 평소 +0.15", kind: "가정", source: "sim.ts step", note: "만족도가 손님 수에 주는 영향(10%p당 5%)도 가정" },
         { item: "리뷰 문구", value: "상황별 문장 12개", kind: "예시값", source: "sim.ts REVIEW_TEXT", note: "실제 리뷰가 아님" },
         { item: "폐업 규칙", value: "현금이 60일 내리 0 아래", kind: "차용", source: "기존 게임의 규칙 (README: 현금이 두 달 연속 0 아래면 폐업)" },
